@@ -8,6 +8,9 @@ import torch.nn as nn
 import torch.optim as optim
 
 
+device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
+
+
 class MLP(nn.Module):
 
     def __init__(self, in_dim, out_dim):
@@ -47,6 +50,9 @@ class DQN:
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
         self.criterion = nn.MSELoss()
 
+        self.model.to(device)
+        self.target_model.to(device)
+
     def act(self, state):
         self.epsilon *= self.epsilon_decay
         self.epsilon = max(self.epsilon_min, self.epsilon)
@@ -54,7 +60,7 @@ class DQN:
             return self.env.action_space.sample()
 
         st = self.model(state)
-        st = st.detach().numpy()
+        st = st.cpu().detach().numpy()
 
         return np.argmax(st[0])
 
@@ -70,6 +76,9 @@ class DQN:
         samples = random.sample(self.memory, batch_size)
         for sample in samples:
             state, action, reward, new_state, done = sample
+
+            state = torch.tensor(state).float().to(device)
+            new_state = torch.tensor(state).float().to(device)
 
             state = torch.tensor(state).float()
             new_state = torch.tensor(new_state).float()
@@ -108,7 +117,7 @@ def main():
     epsilon = .95
 
     trials = 1000
-    trial_len = 500
+    trial_len = 300
 
     # updateTargetNetwork = 1000
     dqn_agent = DQN(env=env)
@@ -116,7 +125,7 @@ def main():
     for trial in range(trials):
         cur_state = env.reset().reshape(1, 2)
         for step in range(trial_len):
-            cur_state = torch.tensor(cur_state).float()
+            cur_state = torch.tensor(cur_state).float().to(device)
 
             action = dqn_agent.act(cur_state)
             new_state, reward, done, _ = env.step([action])
