@@ -8,7 +8,6 @@ import datetime
 from q_learning import run_training as run_q_learning
 import gym
 
-device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
 
 if __name__ == "__main__":
     env = gym.make("MountainCar-v0")
