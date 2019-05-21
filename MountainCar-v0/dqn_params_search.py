@@ -1,14 +1,15 @@
 import os
 from time import time
-import itertools
 import numpy as np
 import pandas as pd
 import datetime
+import itertools
 
-from q_learning import run_training as run_q_learning
+import torch
 import gym
 
-device = torch.device(f"cuda:0" if torch.cuda.is_available() else "cpu")
+from dqn import run_training as run_dqn_learning
+
 
 if __name__ == "__main__":
     env = gym.make("MountainCar-v0")
@@ -16,15 +17,19 @@ if __name__ == "__main__":
 
     configs = {
         'env': [env],
-        'lr': [0.1, 0.2, 0.25, 0.3],
-        'discount': [0.9, 0.99],
-        'epsilon': [0.8, 0.9, 0.99],
-        'min_eps': [0, 0.1],
-        'states_size': [[5, 50], [10, 100], [15, 80], [10, 200]],
-        'episodes': [5_000],
-        'monitor_reward_eps': [10],
-        'display': [False],
-        'img_folder': ['imgs'],
+        'trials': [1000],
+        'trial_len': [500],
+        'gamma': [0.85, 0.9],
+        'epsilon': [1.0],
+        'epsilon_min': [0.01],
+        'epsilon_decay': [0.995, 0.999],
+        'learning_rate': [0.005],
+        'hidden_sizes': [[20, 20, 20], [30, 60, 30], [20, 50, 20]],
+        'tau': [0.1, 0.125],
+        'mem_size': [1000, 2000, 3000],
+        'memory_batch': [32, 64],
+        'cuda': [True],
+        'gpu_num': [0],
         'seed': [2019]
     }
 
@@ -38,7 +43,7 @@ if __name__ == "__main__":
     results_dir = f"MountainCar-v0/results/{cur_date}"
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
-    res_path = f"{results_dir}/q_learning.csv"
+    res_path = f"{results_dir}/dqn_learing.csv"
     if not os.path.exists(res_path):
         df = pd.DataFrame(columns=configs.keys())
         df.to_csv(res_path, index=False)
@@ -52,7 +57,7 @@ if __name__ == "__main__":
         print(f"Configuration: ", param)
         print(f"Progress {i+1}/{len(param_grid)}. Estimated time until end: {time_estimate} min")
         time_start = time()
-        rewards = run_q_learning(config=param)
+        rewards = run_dqn_learning(config=param)
         conf_durations.append(time() - time_start)
         df = pd.read_csv(res_path)
         df = df.append(pd.Series({**param, **{'mean_rewards': np.mean(rewards),

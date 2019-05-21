@@ -237,7 +237,7 @@ if __name__ == "__main__":
         'epsilon_decay': 0.995,
         'learning_rate': 0.005,
         'hidden_sizes': [30, 60, 30],
-        'tau': 125,
+        'tau': 0.125,
         'mem_size': 3000,
         'memory_batch': 32,
         'cuda': True,
