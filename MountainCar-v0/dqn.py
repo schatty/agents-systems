@@ -2,6 +2,7 @@ import gym
 import numpy as np
 import random
 from collections import deque
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
@@ -31,24 +32,29 @@ class MLP(nn.Module):
 
 
 class DQN:
-    def __init__(self, env):
+    def __init__(self, env, gamma, epsilon, epsilon_min, epsilon_decay, learning_rate, tau, mem_size, memory_batch, device):
         self.env = env
-        self.memory = deque(maxlen=2000)
+        self.memory = deque(maxlen=mem_size)
+        self.memory_batch = memory_batch
 
-        self.gamma = 0.85
-        self.epsilon = 1.0
-        self.epsilon_min = 0.01
-        self.epsilon_decay = 0.995
-        self.learning_rate = 0.005
-        self.tau = .125
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.epsilon_min = epsilon_min
+        self.epsilon_decay = epsilon_decay
+        self.learning_rate = learning_rate
+        self.tau = tau
 
         in_dim = self.env.observation_space.shape[0]
-        out_dim = self.env.action_space.shape[0]
+        out_dim = self.env.action_space.n
 
         self.model = MLP(in_dim, out_dim)
         self.target_model = MLP(in_dim, out_dim)
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
         self.criterion = nn.MSELoss()
+
+        self.model.to(device)
+        self.target_model.to(device)
+        self.device = device
 
     def act(self, state):
         self.epsilon *= self.epsilon_decay
@@ -56,9 +62,7 @@ class DQN:
         if np.random.random() < self.epsilon:
             return self.env.action_space.sample()
 
-        st = self.model(state)
-        st = st.detach().numpy()
-
+        st = self.model(state).cpu().detach().numpy()
         return np.argmax(st[0])
 
     def remember(self, state, action, reward, new_state, done):
@@ -66,16 +70,15 @@ class DQN:
 
     def replay(self):
         self.model.train()
-        batch_size = 32
-        if len(self.memory) < batch_size:
+        if len(self.memory) < self.memory_batch:
             return
 
-        samples = random.sample(self.memory, batch_size)
+        samples = random.sample(self.memory, self.memory_batch)
         for sample in samples:
             state, action, reward, new_state, done = sample
 
-            state = torch.tensor(state).float()
-            new_state = torch.tensor(new_state).float()
+            state = torch.tensor(state).float().to(self.device)
+            new_state = torch.tensor(state).float().to(self.device)
 
             target = self.target_model(state)
             if done:
@@ -103,48 +106,83 @@ class DQN:
 
 
     def save_model(self, fn):
-        #self.model.save(fn)
+        # TODO: Add saving logic
         pass
 
 
-def main():
-    env = gym.make("MountainCar-v0")
-    gamma = 0.9
-    epsilon = .95
+def run_training(config):
+    # Reproducibility
+    np.random.seed(config['seed'])
+    torch.manual_seed(config['seed'])
 
-    trials = 1000
-    trial_len = 500
+    # Set device on which to train
+    cuda_on = torch.cuda.is_available() and config['cuda']
+    gpu_num = config['gpu_num']
+    device = torch.device(f"cuda:{gpu_num}" if cuda_on else "cpu")
 
-    # updateTargetNetwork = 1000
-    dqn_agent = DQN(env=env)
-    steps = []
-    for trial in range(trials):
+    # Num of trials
+    env = config['env']
+    trials = config['trials']
+    trial_len = config['trial_len']
+
+    # Agent as DQN
+    agent = DQN(env=env,
+                gamma=config['gamma'],
+                epsilon=config['epsilon'],
+                epsilon_min=config['epsilon_min'],
+                epsilon_decay = config['epsilon_decay'],
+                learning_rate=config['learning_rate'],
+                tau=config['tau'],
+                mem_size=config['mem_size'],
+                memory_batch=config['memory_batch'],
+                device=device)
+
+    for trial in tqdm(range(trials)):
         cur_state = env.reset().reshape(1, 2)
         for step in range(trial_len):
-            cur_state = torch.tensor(cur_state).float()
+            cur_state = torch.tensor(cur_state).float().to(device)
 
-            action = dqn_agent.act(cur_state)
+            # Agent Acts
+            action = agent.act(cur_state)
             new_state, reward, done, _ = env.step(action)
-
-            # reward = reward if not done else -20
             new_state = new_state.reshape(1, 2)
-            dqn_agent.remember(cur_state, action, reward, new_state, done)
 
-            dqn_agent.replay()  # internally iterates default (prediction) model
-            dqn_agent.target_train()  # iterates target model
+            # Update agent's memory
+            agent.remember(cur_state, action, reward, new_state, done)
+
+            # Learn from memory
+            agent.replay()
+            # Train target network
+            agent.target_train()
 
             cur_state = new_state
             if done:
                 break
-        if step >= 199:
-            print("Failed to complete in trial {}".format(trial))
-            if step % 10 == 0:
-                dqn_agent.save_model("trial-{}.model".format(trial))
-        else:
-            print("Completed in {} trials".format(trial))
-            dqn_agent.save_model("success.model")
+        if step < 199:
+            print(f"Completed on the {trial} trial")
+            agent.save_model("dqn.pt")
             break
 
 
 if __name__ == "__main__":
-    main()
+    env = gym.make("MountainCar-v0")
+    env.reset()
+
+    config = {
+        'env': env,
+        'trials': 1000,
+        'trial_len': 500,
+        'gamma': 0.85,
+        'epsilon': 1.0,
+        'epsilon_min': 0.01,
+        'epsilon_decay': 0.995,
+        'learning_rate': 0.005,
+        'tau': 125,
+        'mem_size': 3000,
+        'memory_batch': 32,
+        'cuda': True,
+        'gpu_num': 0,
+        'seed': 2019
+    }
+
+    run_training(config)
