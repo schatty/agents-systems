@@ -11,28 +11,67 @@ import torch.optim as optim
 
 class MLP(nn.Module):
 
-    def __init__(self, in_dim, out_dim):
+    def __init__(self, in_dim, out_dim, hidden_sizes=(30, 60, 30), nonlinearity='relu'):
+        """
+        MLP with 3 hidden layers for now.
+
+        Args:
+            in_dim (int): input dimension
+            out_dim (int): output dimension
+            hidden_sizes (list): list of 3 hidden sizes
+            nonlinearity (str): relu|leaky_relu
+        """
         super(MLP, self).__init__()
 
-        self.fc1 = nn.Linear(in_dim, 24)
-        self.fc2 = nn.Linear(24, 48)
-        self.fc3 = nn.Linear(48, 24)
-        self.fc4 = nn.Linear(24, out_dim)
-        self.relu = nn.ReLU()
+        # Linear layers
+        if len(hidden_sizes) != 3:
+            raise ValueError("MLP supports 3 hidden layers for now!")
+        h1, h2, h3 = hidden_sizes
+        self.fc1 = nn.Linear(in_dim, h1)
+        self.fc2 = nn.Linear(h1, h2)
+        self.fc3 = nn.Linear(h2, h3)
+        self.fc4 = nn.Linear(h3, out_dim)
+
+        # Check nonlinearity
+        nonlinearity = nonlinearity.lower()
+        if nonlinearity == 'relu':
+            self.nonlinear = nn.ReLU()
+        elif nonlinearity == 'leaky_relu':
+            self.nonlinear = nn.LeakyReLU
+        else:
+            raise ValueError("Unknown nonlinearity yet!")
 
     def forward(self, x):
         x = self.fc1(x)
-        x = self.relu(x)
+        x = self.nonlinear(x)
         x = self.fc2(x)
-        x = self.relu(x)
+        x = self.nonlinear(x)
         x = self.fc3(x)
-        x = self.relu(x)
+        x = self.nonlinear(x)
         x = self.fc4(x)
         return x
 
 
 class DQN:
-    def __init__(self, env, gamma, epsilon, epsilon_min, epsilon_decay, learning_rate, tau, mem_size, memory_batch, device):
+    def __init__(self, env, gamma, epsilon, epsilon_min, epsilon_decay,
+                 learning_rate, tau, mem_size, memory_batch, device,
+                 hidden_sizes):
+        """
+        Basic DQN Agent.
+
+        Args:
+            env (Environment): object of the environment where agent operates
+            gamma (float): discount rate
+            epsilon (float): epsion-greedy policy
+            epsilon_min (float): minimum number of epsilon
+            epsilon_decay (float): decay rate for epsilon value
+            learning_rate (float): learning rate
+            tau (float): rate for target network updates
+            mem_size (int): size of the buffer replay
+            memory_batch (int): size of the batch to train agent from memory
+            device (torch.device): device to train agent on
+            hidden_sizes (list): list of 3 hidden sizes for internal MLPs
+        """
         self.env = env
         self.memory = deque(maxlen=mem_size)
         self.memory_batch = memory_batch
@@ -47,8 +86,10 @@ class DQN:
         in_dim = self.env.observation_space.shape[0]
         out_dim = self.env.action_space.n
 
-        self.model = MLP(in_dim, out_dim)
-        self.target_model = MLP(in_dim, out_dim)
+        self.model = MLP(in_dim, out_dim,
+                         hidden_sizes=hidden_sizes)
+        self.target_model = MLP(in_dim, out_dim,
+                                hidden_sizes=hidden_sizes)
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
         self.criterion = nn.MSELoss()
 
@@ -57,18 +98,24 @@ class DQN:
         self.device = device
 
     def act(self, state):
+        """ Choose action from the given state. """
         self.epsilon *= self.epsilon_decay
         self.epsilon = max(self.epsilon_min, self.epsilon)
         if np.random.random() < self.epsilon:
             return self.env.action_space.sample()
 
+        # TODO: remove detach logic
         st = self.model(state).cpu().detach().numpy()
         return np.argmax(st[0])
 
     def remember(self, state, action, reward, new_state, done):
+        """
+        Remember S A R S values into memory.
+        """
         self.memory.append([state, action, reward, new_state, done])
 
     def replay(self):
+        """ Train agent on its memory. """
         self.model.train()
         if len(self.memory) < self.memory_batch:
             return
@@ -95,6 +142,8 @@ class DQN:
             self.optimizer.step()
 
     def target_train(self):
+        """Copy weights from base model to target one."""
+        # TODO: Remove this nightmare
         self.target_model.fc1.weight.data.copy_(self.model.fc1.weight.data * self.tau + self.target_model.fc1.weight.data * (1-self.tau))
         self.target_model.fc1.bias.data.copy_(self.model.fc1.bias.data * self.tau + self.target_model.fc1.bias.data * (1-self.tau))
         self.target_model.fc2.weight.data.copy_(self.model.fc2.weight.data * self.tau + self.target_model.fc2.weight.data * (1-self.tau))
@@ -111,6 +160,14 @@ class DQN:
 
 
 def run_training(config):
+    """
+    Run DQN experiment.
+    Args:
+        config (dict): full configuration of the experiment.
+
+    Returns (int): number of successfull step where agent solve environment
+
+    """
     # Reproducibility
     np.random.seed(config['seed'])
     torch.manual_seed(config['seed'])
@@ -132,6 +189,7 @@ def run_training(config):
                 epsilon_min=config['epsilon_min'],
                 epsilon_decay = config['epsilon_decay'],
                 learning_rate=config['learning_rate'],
+                hidden_sizes=config['hidden_sizes'],
                 tau=config['tau'],
                 mem_size=config['mem_size'],
                 memory_batch=config['memory_batch'],
@@ -162,6 +220,7 @@ def run_training(config):
             print(f"Completed on the {trial} trial")
             agent.save_model("dqn.pt")
             break
+    return step
 
 
 if __name__ == "__main__":
@@ -177,6 +236,7 @@ if __name__ == "__main__":
         'epsilon_min': 0.01,
         'epsilon_decay': 0.995,
         'learning_rate': 0.005,
+        'hidden_sizes': [30, 60, 30],
         'tau': 125,
         'mem_size': 3000,
         'memory_batch': 32,
