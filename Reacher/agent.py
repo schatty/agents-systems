@@ -16,7 +16,7 @@ class Agent:
         self.network = ActorCriticNetwork(state_size, action_size)
         self.optimizer = optim.Adam(self.network.parameters(), 2e-4, eps=1e-5)
 
-        self.disctount_rate = 0.99
+        self.discount_rate = 0.99
         self.tau = 0.95
         self.learning_rounds = 10
         self.ppo_clip = 0.2
@@ -64,7 +64,7 @@ class Agent:
             states, value, actions, log_probs, rewards, dones = rollout[i]
             dones = torch.Tensor(dones).unsqueeze(1).cuda()
             rewards = torch.Tensor(rewards).unsqueeze(1).cuda()
-            next_value = rollout[i + 1][i]
+            next_value = rollout[i + 1][1]
             returns = rewards + self.discount_rate * dones * returns
 
             td_error = rewards + self.discount_rate * dones * next_value.detach() - value.detach()
@@ -127,7 +127,7 @@ class Batcher:
         self.batch_end = self.batch_start + self.batch_size 
 
     def end(self):
-        return self.batch_start >= self.num_etries 
+        return self.batch_start >= self.num_entries
 
     def next_batch(self):
         batch = []
