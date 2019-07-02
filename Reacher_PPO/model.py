@@ -32,7 +32,7 @@ class ActorCriticNetwork(nn.Module):
         self.critic = FCNetwork(state_size, 1)
         device_name = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.device = torch.device(device_name)
-        self.std = nn.Parameter(torch.ones(1, action_size)).to(self.deivce)
+        self.std = nn.Parameter(torch.ones(1, action_size)).to(self.device)
         self.to(self.device)
 
     def forward(self, state, action=None):
