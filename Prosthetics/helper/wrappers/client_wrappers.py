@@ -20,7 +20,9 @@ class ClientToEnv:
 class JSONable(EnvironmentWrapper):
     def __init__(self, env):
         """
-        Environment Wrapper that converts NumPy ndarray type actions to list. This wrapper is needed for communicating with the client for submission.all
+        Environment Wrapper that converts NumPy ndarray type actions 
+        to list. This wrapper is needed for communicating with 
+        the client for submission.all
         """
         super().__init__(env)
         self.env = env

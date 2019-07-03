@@ -1,10 +1,8 @@
 import argparse
-
 from osim.env import ProstheticsEnv
-from osim.http.client import Client
-
 from helper.wrappers import DictToListFull, ForceDictObservation, JSONable
-from helper.baselines import * 
+from helper.baselines import TensorforcePPOAgent
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="AI for Prosthetics")
@@ -17,19 +15,15 @@ if __name__ == "__main__":
         raise ValueError(f'[run] Agent {args.agent} not found.')
     SpecifiedAgent = globals()[args.agent]
 
+    env = ProstheticsEnv(visualize=args.visualize)
+    env = ForceDictObservation(env)
+    env = DictToListFull(env)
+    env = JSONable(env)
+    agent = SpecifiedAgent(env.observation_space, env.action_space)
+    
     if args.nb_steps:
         # Train agent localy
-        env = ProstheticsEnv(visualize=args.visualize)
-        env = ForceDictObservation(env)
-        env = DictToListFull(env)
-        env = JSONable(env)
-        agent = SpecifiedAgent(env.observation_space, env.action_space)
         agent.train(env, int(args.nb_steps))
     else:
         # Test agent locally
-        env = ProstheticsEnv(visualize=args.visualize)
-        env = ForceDictObservation(env)
-        env = DictToListFull(env)
-        env = JSONable(env)
-        agent = SpecifiedAgent(env.observation_space, env.action_space)
         agent.test(env)

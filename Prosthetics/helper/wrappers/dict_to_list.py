@@ -7,7 +7,9 @@ from .wrapper import EnvironmentWrapper
 class DictToListFull(EnvironmentWrapper):
     def __init__(self, env):
         """
-        A wrapper that formats dict-type observation to list-type observation. Appends all meaningfull unique numbers in the dict-type observation to a list. The resulting list has length 347.
+        A wrapper that formats dict-type observation to list-type 
+        observation. Appends all meaningfull unique numbers in 
+        the dict-type observation to a list. The resulting list has length 347.
         """
         super().__init__(env)
         self.env = env
@@ -27,7 +29,6 @@ class DictToListFull(EnvironmentWrapper):
         Return observation list of length 347 given a dict-type observation.
         """
         res = []
-
         
         # Body Observations
         for info_type in ['body_pos', 'body_pos_rot',
