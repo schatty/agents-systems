@@ -3,9 +3,8 @@ import argparse
 from osim.env import ProstheticsEnv
 from osim.http.client import Client
 
-from helper.wrappers import ClientToEnv, DictToListFull, ForceDictObservation, JSONable
-from agents import *
-
+from helper.wrappers import DictToListFull, ForceDictObservation, JSONable
+from helper.baselines import * 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="AI for Prosthetics")
@@ -16,11 +15,21 @@ if __name__ == "__main__":
 
     if args.agent not in globals():
         raise ValueError(f'[run] Agent {args.agent} not found.')
-    SpecificAgent = globals()[args.agent]
+    SpecifiedAgent = globals()[args.agent]
 
-    env = ProstheticsEnv(visualize=args.visualize)
-    env = ForceDictObservation(env)
-    env = DictToListFull(env)
-    env = JSONable(env)
-    agent = SpecifiedAgent(env.observation_space, env.action_space)
-    agent.train(env, int(args.nb_steps))
+    if args.nb_steps:
+        # Train agent localy
+        env = ProstheticsEnv(visualize=args.visualize)
+        env = ForceDictObservation(env)
+        env = DictToListFull(env)
+        env = JSONable(env)
+        agent = SpecifiedAgent(env.observation_space, env.action_space)
+        agent.train(env, int(args.nb_steps))
+    else:
+        # Test agent locally
+        env = ProstheticsEnv(visualize=args.visualize)
+        env = ForceDictObservation(env)
+        env = DictToListFull(env)
+        env = JSONable(env)
+        agent = SpecifiedAgent(env.observation_space, env.action_space)
+        agent.test(env)
