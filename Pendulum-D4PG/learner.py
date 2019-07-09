@@ -8,7 +8,7 @@ import tensorflow as tf
 import numpy as np
 
 from params import train_params
-from utils.network import Actor, Actor_BN, Critic, Critic_BN
+from utils.network import Actor_BN, Critic_BN
 
 
 class Learner:
@@ -24,10 +24,10 @@ class Learner:
         # Define input placeholders
         self.state_ph = tf.placeholder(tf.float32, ((train_params.BATCH_SIZE,) + train_params.STATE_DIMS))
         self.action_ph = tf.placeholder(tf.float32, ((train_params.BATCH_SIZE,) + train_params.ACTION_DIMS))
-        # Atom values of target network with Bellman update appliedi
-        self.target_atoms_ph = tf.placeholder(tf.float32, (train_params.BATCH_SIZE, train_params.NUMATOMS))
+        # Atom values of target network with Bellman update applied
+        self.target_atoms_ph = tf.placeholder(tf.float32, (train_params.BATCH_SIZE, train_params.NUM_ATOMS))
         # Future Z-distribution - for critic training
-        self.target_Z_ph = tf.placeholder(tf.foat32, (train_params.BATCH_SIZE, train_params.NUM_ATOMS))
+        self.target_Z_ph = tf.placeholder(tf.float32, (train_params.BATCH_SIZE, train_params.NUM_ATOMS))
         # Gradient of critic's value output wrt action input - for actor training
         self.action_grads_ph = tf.placeholder(tf.float32, ((train_params.BATCH_SIZE,)+ train_params.ACTION_DIMS))
         # Batch of IS weights to weight gradient updates based on sample priorities
@@ -42,8 +42,8 @@ class Learner:
 
         # Create policy (actor) network + target network
         if train_params.USE_BATCH_NORM:
-            self.actor_net = Actor_BN(self.state_ph, train_aprams.STATE_DIMS, train_params.ACTION_DIMS, train_params.ACTION_BOUND_LOW, train_params.ACTION_BOUND_HIGH, train_params.DENSE2_SIZE, train_params.FINAL_LAYER_INIT, is_training=True, scope='learner_actor_main')
-             self.actor_target_net = Actor_BN(self.state_ph, train_aprams.STATE_DIMS, train_params.ACTION_DIMS, train_params.ACTION_BOUND_LOW, train_params.ACTION_BOUND_HIGH, train_params.DENSE2_SIZE, train_params.FINAL_LAYER_INIT, is_training=True, scope='learner_actor_target')
+            self.actor_net = Actor_BN(self.state_ph, train_params.STATE_DIMS, train_params.ACTION_DIMS, train_params.ACTION_BOUND_LOW, train_params.ACTION_BOUND_HIGH, train_params.DENSE1_SIZE, train_params.DENSE2_SIZE, train_params.FINAL_LAYER_INIT, is_training=True, scope='learner_actor_main')
+            self.actor_target_net = Actor_BN(self.state_ph, train_params.STATE_DIMS, train_params.ACTION_DIMS, train_params.ACTION_BOUND_LOW, train_params.ACTION_BOUND_HIGH, train_params.DENSE1_SIZE, train_params.DENSE2_SIZE, train_params.FINAL_LAYER_INIT, is_training=True, scope='learner_actor_target')
         else:
             raise Exception("Actor without BN")
 
@@ -56,7 +56,7 @@ class Learner:
         self.checkpoint_path = os.path.join(train_params.CKPT_DIR, model_name)
         if not os.path.exists(train_params.CKPT_DIR):
             os.makedirs(train_params.CKPT_DIR)
-        saver_varl = [v for v in tf.global_variables() if 'learner' in v.name]
+        saver_vars = [v for v in tf.global_variables() if 'learner' in v.name]
         self.saver = tf.train.Saver(var_list=saver_vars, max_to_keep=201)
 
     def build_update_ops(self):
@@ -65,7 +65,7 @@ class Learner:
 
         # Create ops which update target network params with hard copy of main network params
         init_update_op = []
-        for from_var, to_var in zip(network_aprams, target_network_params):
+        for from_var, to_var in zip(network_params, target_network_params):
             init_update_op.append(to_var.assign(from_var))
 
         # Create ops with update target network params with fraction of (tau) main network params
@@ -123,7 +123,7 @@ class Learner:
             # Predict actions for next states by passing next states through policy target network
             future_action = self.sess.run(self.actor_target_net.output, {self.state_ph: next_states_batch})
             # Predict future Z distribution by passing next states and actions through value target network, also get target network's Z-atom values
-            target_Z_dist, target_Z_atoms = self.sess.run([self.critic_target_net.output_probs, self.critic_target_net.z_atoms])
+            target_Z_dist, target_Z_atoms = self.sess.run([self.critic_target_net.output_probs, self.critic_target_net.z_atoms], {self.state_ph:next_states_batch, self.action_ph:future_action})
             # Create batch of target network's Z-atoms
             target_Z_atoms = np.repeat(np.expand_dims(target_Z_atoms, axis=0), train_params.BATCH_SIZE, axis=0)
             # Value of terminal states is 0 by definition
@@ -131,7 +131,8 @@ class Learner:
             # Apply Bellman update to each atom
             target_Z_atoms = np.expand_dims(rewards_batch, axis=1) + (target_Z_atoms*np.expand_dims(gammas_batch, axis=1))
             # Train critic
-            TD_error, _ = self.sess.run([self.critic_net.loss, self.critic_train_step], {self.state_ph: states_batch, self.action_ph: actions_batch, self.target_Z_ph: target_Z_dist, self.target_atoms_ph: target_Z_atoms, self.weights_ph: weights_batch})
+            TD_error, _ = self.sess.run([self.critic_net.loss, self.critic_train_step],
+                                        {self.state_ph: states_batch, self.action_ph: actions_batch, self.target_Z_ph: target_Z_dist, self.target_atoms_ph: target_Z_atoms, self.weights_ph: weights_batch})
 
             # Use critic TD errors to update sample priorities
             self.PER_memory.update_priorities(idx_batch, (np.abs(TD_error)+train_params.PRIORITY_EPSILON))
@@ -144,7 +145,7 @@ class Learner:
             action_grads = self.sess.run(self.critic_net.action_grads, {self.state_ph: states_batch, self.action_ph: actor_actions})
 
             # Train actor
-            self.sess.run(self.actor_train_step, {self.state_ph: states_batch, self.action_grads_ph:action_grads[0])
+            self.sess.run(self.actor_train_step, {self.state_ph: states_batch, self.action_grads_ph:action_grads[0]})
 
             # Update target networks
             self.sess.run(self.update_op)

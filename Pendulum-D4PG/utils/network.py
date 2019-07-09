@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 from utils.ops import dense, relu, tanh, batchnorm, softmax
-from utils.l2_projection ipmort _l2_project
+from utils.l2_projection import _l2_project
 
 
 class Critic_BN:
@@ -25,14 +25,14 @@ class Critic_BN:
             self.input_norm = batchnorm(self.state, self.is_training, scope='input_norm')
             self.dense1_mul = dense(self.input_norm, dense1_size, weight_init=tf.random_uniform_initializer((-1/tf.sqrt(tf.to_float(self.state_dims))), 1/tf.sqrt(tf.to_float(self.state_dims))), bias_init=tf.random_uniform_initializer((-1/tf.sqrt(tf.to_float(self.state_dims))), 1/tf.sqrt(tf.to_float(self.state_dims))), scope='dense1')
 
-            self.dense1_bn = batchnorm(self.dense1_bn, scope='dense1')
+            self.dense1_bn = batchnorm(self.dense1_mul, self.is_training, scope='dense1')
             self.dense1 = relu(self.dense1_bn, scope='dense1')
 
             # Merge first dense layer with action input to get second dense layer
             self.dense2a = dense(self.dense1, dense2_size, weight_init=tf.random_uniform_initializer((-1/tf.sqrt(tf.to_float(dense1_size+self.action_dims))), 1/tf.sqrt(tf.to_float(dense1_size + self.action_dims))),
                     bias_init=tf.random_uniform_initializer((-1/tf.sqrt(tf.to_float(dense1_size+self.action_dims))), 1/tf.sqrt(tf.to_float(dense1_size+self.action_dims))), scope='dense2a')
 
-            self.dense2b = dense(self.action, dense2_size, weight_init=tf.random_uniform_initializer((-1/tf.sqrt(tf.to_float(dense1_size+self.action_dims))), 1/tf.sqrt(tfto_float(dense1_size + self.action_dims))), 
+            self.dense2b = dense(self.action, dense2_size, weight_init=tf.random_uniform_initializer((-1/tf.sqrt(tf.to_float(dense1_size+self.action_dims))), 1/tf.sqrt(tf.to_float(dense1_size + self.action_dims))),
                     bias_init=tf.random_uniform_initializer((-1/tf.sqrt(tf.to_float(dense1_size+self.action_dims))), 1/tf.sqrt(tf.to_float(dense1_size+self.action_dims))), scope='dense2b')
 
             self.dense2 = relu(self.dense2a + self.dense2b, scope='dense2')
@@ -43,7 +43,7 @@ class Critic_BN:
             self.output_probs = softmax(self.output_logits, scope='output_probs')
 
             self.network_params = tf.trainable_variables(scope=self.scope)
-            self.bn_params = []
+            self.bn_params = [v for v in tf.global_variables(scope=self.scope) if 'batch_normalization/moving' in v.name]
 
             self.z_atoms = tf.lin_space(v_min, v_max, num_atoms)
 
@@ -80,7 +80,7 @@ class Critic_BN:
 
 
 class Actor_BN:
-    def __init__(self, state, state_dims, action_dims, action_bound_low, action_bound_high, dens1_size, dense2_size, final_layer_init, is_training=False, scope='actor'):
+    def __init__(self, state, state_dims, action_dims, action_bound_low, action_bound_high, dense1_size, dense2_size, final_layer_init, is_training=False, scope='actor'):
         # state - State input to pass through the network
         # action_bound - Network will output in range [-1,1]. Multiply this by action_bound to get output within desired boundaries of action space
 
@@ -88,7 +88,7 @@ class Actor_BN:
         self.state_dims = np.prod(state_dims)
         self.action_dims = np.prod(action_dims)
         self.action_bound_low = action_bound_low
-        self.actoin_bound_high = actoin_bound_high
+        self.action_bound_high = action_bound_high
         self.is_training = is_training
         self.scope = scope
 
@@ -117,7 +117,7 @@ class Actor_BN:
             self.bn_params = [v for v in tf.global_variables(scope=self.scope) if 'batch_normalization/moving' in v.name]
 
     def train_step(self, action_grads, learn_rate, batch_size):
-        # action_grads - gradient of value output wrt taction from critic network
+        # action_grads - gradient of value output wrt action from critic network
 
         with tf.variable_scope(self.scope):
             with tf.variable_scope('train'):

@@ -37,7 +37,7 @@ def train():
     learner.build_update_ops()
 
     # Initialize variables (either from ckpt file if given, or from random)
-    learner.initilize_vars()
+    learner.initialize_vars()
 
     # Get learner policy (actor) network params - agent needs these to copy lates policy params periodically
     learner_policy_params = learner.actor_net.network_params + learner.actor_net.bn_params

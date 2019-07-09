@@ -8,7 +8,7 @@ import cv2
 import imageio
 
 from params import train_params, test_params, play_params
-from utils.network import Actor, Actor_BN
+from utils.network import Actor_BN
 from utils.env_wrapper import PendulumWrapper
 
 
@@ -21,7 +21,7 @@ class Agent:
         self.n_agent = n_agent
 
         # Craete environment
-        fi env == "Pendulum-v0":
+        if env == "Pendulum-v0":
             self.env_wrapper = PendulumWrapper(env)
         else:
             raise Exception("Unknown environment")
@@ -34,7 +34,7 @@ class Agent:
 
         if training:
             # each agent has their own var_scope
-            var_score = ('actor_agent_%02d'%self.n_agent)
+            var_scope = ('actor_agent_%02d'%self.n_agent)
         else:
             # when testing, var_scope comes from main learner policy (actor) network
             var_scope = ('learner_actor_main')
@@ -44,8 +44,9 @@ class Agent:
             self.actor_net = Actor_BN(self.state_ph, train_params.STATE_DIMS, train_params.ACTION_DIMS, train_params.ACTION_BOUND_LOW, train_params.ACTION_BOUND_HIGH, train_params.DENSE1_SIZE, train_params.DENSE2_SIZE, train_params.FINAL_LAYER_INIT, is_training=False, scope=var_scope)
             self.agent_policy_params = self.actor_net.network_params + self.actor_net.bn_params
         else:
-            self.actor_net = Actor(self.state_ph, train_params.STATE_DIMS, train_params.ACTION_DIMS, train_params.ACTION_BOUND_LOW, train_params.ACTION_BOUND_HIGH, train_params.DENSE1_SIZe, train_params.DENSE2_SIZE, train_params.FINAL_LAYER_INIT, scope=var_scope)
-            self.agent_policy_params = self.actor_net.network_params
+            raise Exception("Actor without BN is not added yet.")
+            #self.actor_net = Actor(self.state_ph, train_params.STATE_DIMS, train_params.ACTION_DIMS, train_params.ACTION_BOUND_LOW, train_params.ACTION_BOUND_HIGH, train_params.DENSE1_SIZe, train_params.DENSE2_SIZE, train_params.FINAL_LAYER_INIT, scope=var_scope)
+            #self.agent_policy_params = self.actor_net.network_params
 
     def build_update_op(self, learner_policy_params):
         # Update agent's policy network params from learner
@@ -73,7 +74,7 @@ class Agent:
         self.init_reward_var = tf.variables_initializer([self.ep_reward_var])
 
     def run(self, PER_memory, gaussian_noise, run_agent_event, stop_agent_event):
-        # Continously run agent in environment to collect experiences and add to replay memory
+        # Continuously run agent in environment to collect experiences and add to replay memory
 
         # Initialize deque buffer to store experiences for N-step returns
         self.exp_buffer = deque()
@@ -92,7 +93,7 @@ class Agent:
         while not stop_agent_event.is_set():
             num_eps += 1
 
-            # Reset environment and aexperience buffer
+            # Reset environment and experience buffer
             state = self.env_wrapper.reset()
             state = self.env_wrapper.normalise_state(state)
             self.exp_buffer.clear()
@@ -105,28 +106,29 @@ class Agent:
                 num_steps += 1
 
                 # Take action and store experience
-                if train_parmas.RENDER:
+                if train_params.RENDER:
                     self.env_wrapper.render()
                 # Add batch dimension to single state input, and remove batch dimension from single action output
                 action = self.sess.run(self.actor_net.output, {self.state_ph: np.expand_dims(state, 0)})[0]
-                action += (gaussina_noise() * train_params.NOISE_DECAY ** num_eps)
+                action += (gaussian_noise() * train_params.NOISE_DECAY ** num_eps)
                 next_state, reward, terminal = self.env_wrapper.step(action)
 
                 episode_reward += reward
 
-                next_state = self.env_wrapper.normalize_state(next_state)
-                reward = self.env_wrapper.normalize_reward(reward)
+                next_state = self.env_wrapper.normalise_state(next_state)
+                reward = self.env_wrapper.normalise_reward(reward)
 
                 self.exp_buffer.append((state, action, reward))
 
-                # We need at least N steps in the experience buffer before we can compute Bellman rewards and add an N-step experience to replay memory
+                # We need at least N steps in the experience buffer before we can
+                # compute Bellman rewards and add an N-step experience to replay memory
                 if len(self.exp_buffer) >= train_params.N_STEP_RETURNS:
                     state_0, action_0, reward_0 = self.exp_buffer.popleft()
                     discounted_reward = reward_0
                     gamma = train_params.DISCOUNT_RATE
                     for (_, _, r_i) in self.exp_buffer:
                         discounted_reward += r_i * gamma
-                        gamma *= tain_params.DISCOUNT_RATE
+                        gamma *= train_params.DISCOUNT_RATE
 
                     # If learner is requesting a pause (to remove sample from PER), wait before adding more samples
                     run_agent_event.wait()
@@ -139,7 +141,9 @@ class Agent:
                     if train_params.LOG_DIR is not None:
                         summary_str = self.sess.run(self.summary_op, {self.ep_reward_var: episode_reward})
                         self.summary_writer.add_summary(summary_str, num_eps)
-                    # Comupte Bellman rewards and ad experiences to replay memory for the last N-1 expeoriences still remaining
+
+                    # Compute Bellman rewards and add experiences to replay memory
+                    # for the last N-1 experiences still remaining
                     while len(self.exp_buffer) != 0:
                         state_0, action_0, reward_0 = self.exp_buffer.popleft()
                         discounted_reward = reward_0
@@ -160,7 +164,6 @@ class Agent:
                     self.sess.run(self.update_op)
 
             self.env_wrapper.close()
-
 
     def test(self):
         """ Test a saved ckpt of actor network and save results to file """
@@ -188,10 +191,9 @@ class Agent:
             self.build_summaries(test_params.LOG_DIR)
 
         rewards = []
-
         for test_ep in range(1, test_params.NUM_EPS_TEST+1):
             state = self.env_wrapper.reset()
-            state = self.env_wrapper.normalize_state(state)
+            state = self.env_wrapper.normalise_state(state)
             ep_reward = 0
             step = 0
             ep_done = False
@@ -232,12 +234,12 @@ class Agent:
             output_file.write('Training Episode {}: \t Average reward = {:.2f} +/- {:.2f} /ep \n\n'.format(self.train_ep, mean_reward, error_reward))
             output_file.flush()
             sys.stdout.write('Results saved to file \n\n')
-            std.stdout.flush()
+            sys.stdout.flush()
 
         self.env_wrapper.close()
 
     def play(self):
-        # Play a saved ckpt of actor network in the environment, visualise peformace on screen and save a GIF (optional)
+        # Play a saved ckpt of actor network in the environment, visualise performace on screen and save a GIF (optional)
 
         def load_ckpt(ckpt_dir, ckpt_file):
             # Load ckpt given by ckpt_file, or else load latest ckpt in ckpt_dir
@@ -263,7 +265,7 @@ class Agent:
 
         for ep in range(1, play_params.NUM_EPS_PLAY+1):
             state = self.env_wrapper.reset()
-            state = self.env_wrapper.normalize_state(state)
+            state = self.env_wrapper.normalise_state(state)
             step = 0
             ep_done = False
 
@@ -279,7 +281,7 @@ class Agent:
                 step += 1
 
                 # Episode can finish either by reaching terminal state or max episode steps
-                if termnial or step == play_params.MAX_EP_LENGTH:
+                if terminal or step == play_params.MAX_EP_LENGTH:
                     ep_done = True
 
         # Convert saved frames to gif

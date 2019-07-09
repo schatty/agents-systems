@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def conv2d(inputs, kernel_size, filters, stride, activation=None, use_bias=True, weight_init=tf.contrib.layers.xavier_initialization(), bias_init=tf.zeros_initializer(), scope='conv'):
+def conv2d(inputs, kernel_size, filters, stride, activation=None, use_bias=True, weight_init=tf.contrib.layers.xavier_initializer(), bias_init=tf.zeros_initializer(), scope='conv'):
     with tf.variable_scope(scope):
         if use_bias:
             return tf.layers.conv2d(inputs, filters, kernel_size, 'valid', activation=activation, use_bias=use_bias, kernel_initializer=weight_init)
