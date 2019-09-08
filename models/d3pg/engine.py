@@ -110,12 +110,12 @@ class ExperimentEngine(object):
         processes = []
         replay_queue = torch_mp.Queue(maxsize=replay_queue_size)
         learner_w_queue = torch_mp.Queue(maxsize=n_agents)
+        batch_queue = torch_mp.Queue(maxsize=batch_queue_size)
         training_on = torch_mp.Value('i', 1)
         update_step = torch_mp.Value('i', 0)
         global_episode = torch_mp.Value('i', 0)
 
         # Data sampler
-        batch_queue = torch_mp.Queue(maxsize=batch_queue_size)
         p = torch_mp.Process(target=sampler_worker,
                              args=(config, replay_queue, batch_queue, training_on,
                                    global_episode, update_step, self.experiment_dir))

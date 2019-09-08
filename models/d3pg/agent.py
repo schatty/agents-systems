@@ -91,8 +91,10 @@ class Agent(object):
                     for (_, _, r_i) in self.exp_buffer:
                         discounted_reward += r_i * gamma
                         gamma *= self.config['discount_rate']
-                    if not replay_queue.full():
-                        replay_queue.put([state_0, action_0, discounted_reward, next_state, done, gamma])
+                    try:
+                        replay_queue.put_nowait([state_0, action_0, discounted_reward, next_state, done, gamma])
+                    except:
+                        pass
 
                 state = next_state
 
@@ -105,7 +107,10 @@ class Agent(object):
                         for (_, _, r_i) in self.exp_buffer:
                             discounted_reward += r_i * gamma
                             gamma *= self.config['discount_rate']
-                        replay_queue.put([state_0, action_0, discounted_reward, next_state, done, gamma])
+                        try:
+                            replay_queue.put_nowait([state_0, action_0, discounted_reward, next_state, done, gamma])
+                        except:
+                            pass
                     break
 
                 num_steps += 1

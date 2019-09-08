@@ -202,6 +202,7 @@ class LearnerD3PG(object):
             self.logger.scalar_summary("learner_update_timing", time.time() - update_time)
 
     def run(self, training_on, batch_queue, learner_w_queue, update_step):
+        time_start = time.time()
         while update_step.value < self.num_train_steps:
             if batch_queue.empty():
                 continue
@@ -209,11 +210,14 @@ class LearnerD3PG(object):
 
             self.ddpg_update(batch, update_step, learner_w_queue)
             update_step.value += 1
-            if update_step.value % 1 == 0:
+            if update_step.value % 50 == 0:
                 print("Training step ", update_step.value)
 
         training_on.value = 0
         empty_torch_queue(learner_w_queue)
 
         plot_rewards(self.log_dir)
-        print("Exit learner.")
+        duration_secs = time.time() - time_start
+        duration_h = duration_secs // 3600
+        duration_m = duration_secs % 3600 / 60
+        print(f"Exit learner. Training took: {duration_h:} h {duration_m:.3f} min")
