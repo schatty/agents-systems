@@ -74,7 +74,7 @@ class Agent(object):
                 action = self.actor.get_action(state)
                 action = self.ou_noise.get_action(action, num_steps)
                 action = action.squeeze(0)
-                next_state, reward, done = self.env_wrapper.step(action)
+                next_state, (reward_orig, reward), done = self.env_wrapper.step(action)
 
                 episode_reward += reward
 
@@ -147,6 +147,9 @@ class Agent(object):
         torch.save(self.actor, model_fn)
 
     def save_replay_gif(self):
+        if self.config['env'] in ['LearnToMove']:
+            return
+
         dir_name = "replay_render"
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)

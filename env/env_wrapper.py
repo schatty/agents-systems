@@ -4,10 +4,9 @@ import pandas as pd
 
 
 class EnvWrapper:
-    def __init__(self, env_name, data_normalization_path=None):
-        self.env_name = env_name
-        self.env = gym.make(self.env_name)
-
+    def __init__(self, config, data_normalization_path=None):
+        self.env = None
+        self.config = config
         if data_normalization_path is not None:
             reward_data = pd.read_csv(f"{data_normalization_path}/stats_reward.csv")
             self.reward_mu = float(reward_data['reward_mean'][0])
@@ -31,7 +30,7 @@ class EnvWrapper:
 
     def step(self, action):
         next_state, reward, terminal, _ = self.env.step(action.ravel())
-        return next_state, reward, terminal
+        return next_state, (reward, reward), terminal
 
     def set_random_seed(self, seed):
         self.env.seed(seed)
