@@ -77,10 +77,6 @@ class Agent(object):
                 next_state, (reward_orig, reward), done = self.env_wrapper.step(action)
 
                 episode_reward += reward
-
-                state = self.env_wrapper.normalize_state(state)
-                reward = self.env_wrapper.normalize_reward(reward)
-
                 self.exp_buffer.append((state, action, reward))
 
                 # We need at least N steps in the experience buffer before we can compute Bellman
@@ -93,6 +89,7 @@ class Agent(object):
                         discounted_reward += r_i * gamma
                         gamma *= self.config['discount_rate']
                     try:
+                        discounted_reward = self.env_wrapper.normalize_reward(discounted_reward)
                         replay_queue.put_nowait([state_0, action_0, discounted_reward, next_state, done, gamma])
                     except:
                         pass
@@ -109,6 +106,7 @@ class Agent(object):
                             discounted_reward += r_i * gamma
                             gamma *= self.config['discount_rate']
                         try:
+                            discounted_reward = self.env_wrapper.normalize_reward(discounted_reward)
                             replay_queue.put_nowait([state_0, action_0, discounted_reward, next_state, done, gamma])
                         except:
                             pass

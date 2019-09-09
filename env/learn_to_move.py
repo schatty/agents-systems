@@ -51,7 +51,7 @@ class ObservationTransformer(object):
 
 class LearnToMove(EnvWrapper):
     def __init__(self, config):
-        super(LearnToMove, self).__init__(config['env'])
+        super(LearnToMove, self).__init__(config)
 
         self.env = L2M2019Env(visualize=bool(config['visualize']), integrator_accuracy=0.001)
         self.project = True # False - dict of size 14, True - dict of size 4
@@ -62,6 +62,7 @@ class LearnToMove(EnvWrapper):
         obs, reward_orig, done, _ = self.env.step(action.flatten(), project=self.project)
         done = self.transform_done(done, obs)
         obs = self.observation_transformer.transform(obs)
+        obs = self.normalize_state(obs)
 
         return obs, (reward_orig, reward_orig), done
 
@@ -77,4 +78,6 @@ class LearnToMove(EnvWrapper):
         return done
 
     def reset(self):
-        return self.observation_transformer.transform(self.env.reset(project=self.project))
+        obs = self.observation_transformer.transform(self.env.reset(project=self.project))
+        obs = self.normalize_state(obs)
+        return obs

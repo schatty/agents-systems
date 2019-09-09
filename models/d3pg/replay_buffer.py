@@ -80,10 +80,11 @@ class ReplayBuffer(object):
 
         stats_obs = {}
         obs = np.asarray(obs)
-        stats_obs['obs_mean'] = np.mean(obs, axis=1)
-        stats_obs['obs_std'] = np.std(obs, axis=1)
-        stats_obs['obs_min'] = np.min(obs, axis=1)
-        stats_obs['obs_max'] = np.max(obs, axis=1)
+        print("OBS SHAPE:", obs.shape)
+        stats_obs['obs_mean'] = np.mean(obs, axis=0)
+        stats_obs['obs_std'] = np.std(obs, axis=0)
+        stats_obs['obs_min'] = np.min(obs, axis=0)
+        stats_obs['obs_max'] = np.max(obs, axis=0)
         pd.DataFrame.from_dict(stats_obs).to_csv(f"{dir}/stats_obs.csv", index=False)
 
         stats_reward = {}
