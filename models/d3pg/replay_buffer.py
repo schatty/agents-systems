@@ -1,5 +1,6 @@
 import random
 import numpy as np
+import pandas as pd
 
 
 class ReplayBuffer(object):
@@ -68,3 +69,26 @@ class ReplayBuffer(object):
         weights = np.zeros(len(idxes))
         inds = np.zeros(len(idxes))
         return self._encode_sample(idxes) + [weights, inds]
+
+    def upload_stats(self, dir):
+        print("Start analysing buffer...")
+        obs = []
+        rewards = []
+        for replay in self._storage:
+            obs.append(replay[0])
+            rewards.append(replay[2])
+
+        stats_obs = {}
+        obs = np.asarray(obs)
+        stats_obs['obs_mean'] = np.mean(obs, axis=1)
+        stats_obs['obs_std'] = np.std(obs, axis=1)
+        stats_obs['obs_min'] = np.min(obs, axis=1)
+        stats_obs['obs_max'] = np.max(obs, axis=1)
+        pd.DataFrame.from_dict(stats_obs).to_csv(f"{dir}/stats_obs.csv", index=False)
+
+        stats_reward = {}
+        stats_reward['reward_mean'] = [np.mean(rewards)]
+        stats_reward['reward_std'] = [np.std(rewards)]
+        stats_reward['reward_min'] = [np.min(rewards)]
+        stats_reward['reward_max'] = [np.max(rewards)]
+        pd.DataFrame.from_dict(stats_reward).to_csv(f"{dir}/stats_reward.csv", index=False)

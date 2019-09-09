@@ -25,8 +25,7 @@ class ValueNetwork(nn.Module):
         """
         super(ValueNetwork, self).__init__()
 
-        self.bn1 = nn.BatchNorm1d(num_actions + num_states)
-        self.linear1 = nn.Linear(num_states + num_actions, hidden_size)
+        self.linear1 = nn.Linear(num_states+num_actions, hidden_size)
         self.linear2 = nn.Linear(hidden_size, hidden_size)
         self.linear3 = nn.Linear(hidden_size, 1)
 
@@ -37,8 +36,10 @@ class ValueNetwork(nn.Module):
 
     def forward(self, state, action):
         x = torch.cat([state, action], 1)
-        x = F.relu(self.linear1(x))
-        x = F.relu(self.linear2(x))
+        x = self.linear1(x)
+        x = F.leaky_relu(x)
+        x = self.linear2(x)
+        x = F.leaky_relu(x)
         x = self.linear3(x)
         return x
 
@@ -46,7 +47,7 @@ class ValueNetwork(nn.Module):
 class PolicyNetwork(nn.Module):
     """Actor - return action value given states. """
 
-    def __init__(self, num_states, num_actions, hidden_size, init_w=3e-3, device='cuda', action_func=None):
+    def __init__(self, num_states, num_actions, hidden_size, init_w=3e-3, activation='tanh', device='cuda'):
         """
         Args:
             num_states (int): state dimension
@@ -55,26 +56,29 @@ class PolicyNetwork(nn.Module):
             init_w (float): margins of initialization
         """
         super(PolicyNetwork, self).__init__()
+        assert activation in ['tanh', 'sigmoid']
         self.device = device
-        self.action_func = action_func
 
         self.linear1 = nn.Linear(num_states, hidden_size)
         self.linear2 = nn.Linear(hidden_size, hidden_size)
         self.linear3 = nn.Linear(hidden_size, num_actions)
-
         self.linear3.weight.data.uniform_(-init_w, init_w)
         self.linear3.bias.data.uniform_(-init_w, init_w)
+
+        if activation == 'tanh':
+            self.out_nonlinearity = torch.tanh
+        else:
+            self.out_nonlinearity = torch.sigmoid
 
         self.to(device)
 
     def forward(self, state):
-        x = F.relu(self.linear1(state))
-        x = F.relu(self.linear2(x))
-        x = F.tanh(self.linear3(x))
-
-        if self.action_func is not None:
-            x = self.action_func(x)
-
+        x = self.linear1(state)
+        x = F.leaky_relu(x)
+        x = self.linear2(x)
+        x = F.leaky_relu(x)
+        x = self.linear3(x)
+        x = self.out_nonlinearity(x)
         return x
 
     def get_action(self, state):
@@ -116,16 +120,13 @@ class LearnerD3PG(object):
         # Noise process
         env = create_env_wrapper(config)
         self.ou_noise = OUNoise(env.get_action_space())
-
-        # Action transformation
-        action_func = env.get_action_func()
         del env
 
         # Value and policy nets
         self.value_net = ValueNetwork(state_dim, action_dim, hidden_dim, device=self.device)
-        self.policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim, device=self.device, action_func=action_func)
+        self.policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim, activation=config['policy_output_nonlinearity'], device=self.device)
         self.target_value_net = ValueNetwork(state_dim, action_dim, hidden_dim, device=self.device)
-        self.target_policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim, device=self.device, action_func=action_func)
+        self.target_policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim, activation=config['policy_output_nonlinearity'], device=self.device)
 
         for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
             target_param.data.copy_(param.data)

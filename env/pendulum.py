@@ -10,10 +10,11 @@ class PendulumWrapper(EnvWrapper):
     def normalise_state(self, state):
         return state
 
+    def step(self, action):
+        action *= 2 # Multiply output of tanh with 2 as Pendulum action range is [-2, 2]
+        next_state, reward, terminal, _ = self.env.step(action.ravel())
+        return next_state, reward, terminal
+
     def normalise_reward(self, reward):
         return reward/100.0
 
-    def get_action_func(self):
-        def foo(x):
-            return x * 2
-        return foo

@@ -70,6 +70,9 @@ def sampler_worker(config, replay_queue, batch_queue, training_on,
             logger.scalar_summary("batch_queue", batch_queue.qsize())
             logger.scalar_summary("replay_buffer", len(replay_buffer))
 
+    if config['analyze_replay_buffer']:
+        replay_buffer.upload_stats(log_dir)
+
     empty_torch_queue(batch_queue)
     print("Stop sampler worker.")
 

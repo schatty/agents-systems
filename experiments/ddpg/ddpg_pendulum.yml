@@ -33,6 +33,7 @@ actor_learning_rate: 0.0005
 dense_size: 400 # size of the 2 hidden layers in networks
 final_layer_init: 0.003
 tau: 0.005 # parameter for soft target network updates
+policy_output_nonlinearity: tanh
 
 # Miscellaneous
 results_path: results

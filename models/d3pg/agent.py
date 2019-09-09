@@ -30,9 +30,10 @@ class Agent(object):
         self.ou_noise.reset()
 
         self.learner_w_queue = learner_w_queue
-        self.actor = PolicyNetwork(num_actions=config['action_dims'],
-                                   num_states=config['state_dims'],
-                                   hidden_size=config['dense_size'])
+        self.actor = PolicyNetwork(num_actions=self.config['action_dims'],
+                                   num_states=self.config['state_dims'],
+                                   hidden_size=self.config['dense_size'],
+                                   activation=config['policy_output_nonlinearity'])
         self.actor.eval()
 
         # Logger
@@ -77,8 +78,8 @@ class Agent(object):
 
                 episode_reward += reward
 
-                state = self.env_wrapper.normalise_state(state)
-                reward = self.env_wrapper.normalise_reward(reward)
+                state = self.env_wrapper.normalize_state(state)
+                reward = self.env_wrapper.normalize_reward(reward)
 
                 self.exp_buffer.append((state, action, reward))
 
