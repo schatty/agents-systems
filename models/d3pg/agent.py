@@ -33,7 +33,8 @@ class Agent(object):
         self.actor = PolicyNetwork(num_actions=self.config['action_dims'],
                                    num_states=self.config['state_dims'],
                                    hidden_size=self.config['dense_size'],
-                                   activation=config['policy_output_nonlinearity'])
+                                   activation=config['policy_output_nonlinearity'],
+                                   device=config['device'])
         self.actor.eval()
 
         # Logger

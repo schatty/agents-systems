@@ -50,7 +50,9 @@ class EnvWrapper:
         return self.env.action_space
 
     def normalize_state(self, state):
-        return (state - self.obs_min) / (self.obs_max - self.obs_min)
+        #return (state - self.obs_min) / (self.obs_max - self.obs_min)
+        return state
 
     def normalize_reward(self, reward):
-        return (reward - self.reward_min) / (self.reward_min - self.reward_max)
+        #return (reward - self.reward_min) / (self.reward_min - self.reward_max)
+        return reward

@@ -1,6 +1,7 @@
 from datetime import datetime
 from multiprocessing import set_start_method
 import torch.multiprocessing as torch_mp
+import multiprocessing as mp
 try:
     set_start_method('spawn')
 except RuntimeError:
@@ -111,9 +112,9 @@ class ExperimentEngine(object):
 
         # Data structures
         processes = []
-        replay_queue = torch_mp.Queue(maxsize=replay_queue_size)
+        replay_queue = mp.Queue(maxsize=replay_queue_size)
         learner_w_queue = torch_mp.Queue(maxsize=n_agents)
-        batch_queue = torch_mp.Queue(maxsize=batch_queue_size)
+        batch_queue = mp.Queue(maxsize=batch_queue_size)
         training_on = torch_mp.Value('i', 1)
         update_step = torch_mp.Value('i', 0)
         global_episode = torch_mp.Value('i', 0)
