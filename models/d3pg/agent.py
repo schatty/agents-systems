@@ -1,5 +1,6 @@
 import shutil
 import os
+import numpy as np
 import time
 from collections import deque
 import matplotlib.pyplot as plt
@@ -10,7 +11,7 @@ from .ddpg import PolicyNetwork
 from env.utils import create_env_wrapper
 from utils.logger import Logger
 from utils.misc import make_gif, empty_torch_queue
-
+from utils.exploration import create_epsilon_func
 
 class Agent(object):
 
@@ -60,6 +61,11 @@ class Agent(object):
         while training_on.value:
             episode_reward = 0
             num_steps = 0
+            epsilon_func = create_epsilon_func(self.config['epsilon_mode'],
+                                               initial_value=self.config['epsilon_initial_value'],
+                                               final_value=self.config['epsilon_final_value'],
+                                               cycle_len=self.config['num_steps_train']//self.config['epsilon_num_cycles'],
+                                               num_cycles=self.config['epsilon_num_cycles'])
             self.local_episode += 1
             self.global_episode.value += 1
             self.exp_buffer.clear()
@@ -72,9 +78,14 @@ class Agent(object):
             self.ou_noise.reset()
             done = False
             while not done:
-                action = self.actor.get_action(state)
-                action = self.ou_noise.get_action(action, num_steps)
-                action = action.squeeze(0)
+                epsilon_chance = epsilon_func(update_step.value)
+                rand_n = np.random.random()
+                if rand_n < epsilon_chance:
+                    action = np.random.random(self.config['action_dims'])
+                else:
+                    action = self.actor.get_action(state)
+                    action = self.ou_noise.get_action(action, num_steps)
+                    action = action.squeeze(0)
                 next_state, (reward_orig, reward), done = self.env_wrapper.step(action)
 
                 episode_reward += reward
@@ -119,6 +130,7 @@ class Agent(object):
             self.logger.scalar_summary("update_step", update_step.value)
             self.logger.scalar_summary("reward", episode_reward)
             self.logger.scalar_summary("episode_timing", time.time() - ep_start_time)
+            self.logger.scalar_summary("epsilon", epsilon_chance)
 
             # Saving agent
             if self.local_episode % self.num_episode_save == 0 or episode_reward > best_reward:
