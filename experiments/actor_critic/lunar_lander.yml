@@ -1,0 +1,24 @@
+# Environment parameters
+
+env: LunarLander-v2
+random_seed: 2019
+state_dims: 8
+action_dims: 4
+max_timestep: 10000
+
+# Training parameters
+
+model : ActorCritic
+lr    : 0.02
+beta_start: 0.9
+beta_end: 0.99
+episodes: 400
+gamma: 0.99
+
+# Network parameters
+
+hidden_size: 128
+
+# Miscellaneous
+
+results_path: results

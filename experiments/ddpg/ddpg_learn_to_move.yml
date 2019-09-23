@@ -11,7 +11,7 @@ visualize: 0
 
 model: d3pg
 batch_size: 256
-num_steps_train: 4000000 # number of episodes from all agents
+num_steps_train: 1000 # number of episodes from all agents
 max_ep_length: 1000 # maximum number of steps per episode
 replay_mem_size: 1000000 # maximum capacity of replay memory
 priority_alpha: 0.6 # controls the randomness vs prioritisation of the prioritised sampling (0.0 = Uniform sampling, 1.0 = Greedy prioritisation)
@@ -30,7 +30,7 @@ replay_memory_prioritized: 0 # flag to use prioritized buffer
 device: cuda
 num_episode_save: 500
 analyze_replay_buffer: 0 # Perform analysis of reward and observation stats in the end
-data_normalization_path: results/LearnToMove-d3pg-2019-09-09_23:01:52
+data_normalization_path:
 
 # Network parameters
 
