@@ -6,6 +6,7 @@ import torch.nn.functional as F
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):
         super(Actor, self).__init__()
@@ -46,7 +47,6 @@ class Critic(nn.Module):
         q2 = F.relu(self.l4(sa))
         q2 = F.relu(self.l5(q2))
         q2 = self.l6(q2)
-
         return q1, q2
 
     def Q1(self, state, action):
@@ -59,26 +59,37 @@ class Critic(nn.Module):
 
 
 class TD3(object):
-    def __init__(self, state_dim, action_dim, max_action, discount=0.99, tau=0.005, policy_noise=0.2, noise_clip=0.5, policy_freq=2):
+    def __init__(
+            self,
+            state_dim,
+            action_dim,
+            max_action,
+            discount=0.99,
+            tau=0.005,
+            policy_noise=0.2,
+            noise_clip=0.5,
+            policy_freq=2
+    ):
+
         self.actor = Actor(state_dim, action_dim, max_action).to(device)
         self.actor_target = copy.deepcopy(self.actor)
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), 0.001)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
 
         self.critic = Critic(state_dim, action_dim).to(device)
         self.critic_target = copy.deepcopy(self.critic)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=0.001)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
 
         self.max_action = max_action
         self.discount = discount
         self.tau = tau
-        self.poilcy_noise = policy_noise
+        self.policy_noise = policy_noise
         self.noise_clip = noise_clip
         self.policy_freq = policy_freq
 
         self.total_it = 0
 
     def select_action(self, state):
-        state = torch.tensor(state.reshape(1, -1)).float().to(device)
+        state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         return self.actor(state).cpu().data.numpy().flatten()
 
     def train(self, replay_buffer, batch_size=100):
@@ -88,16 +99,21 @@ class TD3(object):
         state, action, next_state, reward, not_done = replay_buffer.sample(batch_size)
 
         with torch.no_grad():
-            # Select action according to policy and clipped noise
-            noise = (torch.randn_like(action) * self.poilcy_noise).clamp(-self.noise_clip, self.noise_clip)
-            next_action = (self.actor_target(next_state) + noise).clamp(-self.max_action, self.max_action)
+            # Select action according to policy and add clipped noise
+            noise = (
+                    torch.randn_like(action) * self.policy_noise
+            ).clamp(-self.noise_clip, self.noise_clip)
+
+            next_action = (
+                    self.actor_target(next_state) + noise
+            ).clamp(-self.max_action, self.max_action)
 
             # Compute the target Q value
             target_Q1, target_Q2 = self.critic_target(next_state, next_action)
             target_Q = torch.min(target_Q1, target_Q2)
             target_Q = reward + not_done * self.discount * target_Q
 
-        # Get current Q estimantes
+        # Get current Q estimates
         current_Q1, current_Q2 = self.critic(state, action)
 
         # Compute critic loss
@@ -110,7 +126,8 @@ class TD3(object):
 
         # Delayed policy updates
         if self.total_it % self.policy_freq == 0:
-            # Compute actor loss
+
+            # Compute actor losse
             actor_loss = -self.critic.Q1(state, self.actor(state)).mean()
 
             # Optimize the actor
