@@ -2,10 +2,12 @@ import numpy as np
 
 
 def create_epsilon_func(mode, **kwargs):
-    assert mode in ['cyclic'], "Unknown epsilon mode."
+    assert mode in ['cyclic', 'none'], "Unknown epsilon mode."
 
     if mode == "cyclic":
         return create_cycle_decay_fn(**kwargs)
+    elif mode == "none":
+        return create_none_decay_fn(**kwargs)
     return None
 
 
@@ -18,3 +20,9 @@ def create_cycle_decay_fn(initial_value, final_value, cycle_len, num_cycles):
         return relative_cosine * (initial_value - final_value) * relative + final_value
 
     return eps_func
+
+
+def create_none_decay_fn(**kwargs):
+    def foo(step):
+        return 0
+    return foo

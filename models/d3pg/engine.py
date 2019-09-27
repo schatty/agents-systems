@@ -75,6 +75,7 @@ def sampler_worker(config, replay_queue, batch_queue, training_on,
         replay_buffer.upload_stats(log_dir)
 
     empty_torch_queue(batch_queue)
+    print("Replay buffer final size: ", len(replay_buffer))
     print("Stop sampler worker.")
 
 

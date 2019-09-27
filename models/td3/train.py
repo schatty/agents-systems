@@ -3,6 +3,7 @@ import torch
 import gym
 import argparse
 import os
+import matplotlib.pyplot as plt
 
 from models.td3.utils import ReplayBuffer
 from models.td3.td3 import TD3
@@ -35,9 +36,9 @@ if __name__ == "__main__":
         "env_name": "BipedalWalker-v2",
         "seed": 2,
         "start_timesteps": 0,
-        "eval_freq": 10,
-        "episodes": 50,
-        "max_timesteps": 1000,
+        "eval_freq": 50,
+        "episodes": 1000,
+        "max_timesteps": 2000,
         "expl_noise": 0.1,
         "batch_size": 256,
         "discount": 0.99,
@@ -84,6 +85,8 @@ if __name__ == "__main__":
 
     state, done = env.reset(), False
     #episode_num = 0
+    episode_rewards = []
+    num_updates = 0
 
     for i_ep in range(config['episodes']):
         episode_reward = 0
@@ -111,8 +114,9 @@ if __name__ == "__main__":
             episode_reward += reward
 
             # Train agent after collecting sufficient data
-            if t >= config['batch_size']:
+            if len(replay_buffer) >= config['batch_size']:
                 policy.train(replay_buffer, config['batch_size'])
+                num_updates += 1
 
             if done:
                 # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
@@ -120,11 +124,16 @@ if __name__ == "__main__":
                     f"Total T: {t + 1} Episode Num: {i_ep + 1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
                 # Reset environment
                 state, done = env.reset(), False
-                episode_reward = 0
-                episode_timesteps = 0
-                i_ep += 1
                 break
+
+        episode_rewards.append(episode_reward)
 
         # Evaluate episode
         if (i_ep + 1) % config['eval_freq'] == 0:
             evaluations.append(eval_policy(policy, config['env_name'], config['seed']))
+
+    print("Replay buffer: ", len(replay_buffer))
+    print("Num updates: ", num_updates)
+    plt.plot(np.arange(len(episode_rewards)), episode_rewards)
+    plt.show()
+    plt.savefig("plot.png")
