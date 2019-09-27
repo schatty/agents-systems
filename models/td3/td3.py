@@ -1,81 +1,37 @@
 import copy
-import numpy as np
+import time
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+
+from utils.reward_plot import plot_rewards
+from utils.misc import empty_torch_queue
+from .networks import PolicyNetwork, ValueNetwork
+
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, max_action):
-        super(Actor, self).__init__()
+class LearnerTD3(object):
+    def __init__(self, config, log_dir):
+        self.config = config
+        self.log_dir = log_dir
 
-        self.l1 = nn.Linear(state_dim, 256)
-        self.l2 = nn.Linear(256, 256)
-        self.l3 = nn.Linear(256, action_dim)
+        state_dim = config["state_dims"]
+        action_dim = config["action_dims"]
+        max_action = config["max_action"]
+        discount = config["discount_rate"]
+        tau = config["tau"]
+        policy_noise = config["policy_noise"]
+        noise_clip = config["policy_clip"]
+        policy_freq = config["policy_freq"]
 
-        self.max_action = max_action
+        self.num_train_steps = config["steps_train"]
 
-    def forward(self, state):
-        a = F.relu(self.l1(state))
-        a = F.relu(self.l2(a))
-        return self.max_action * torch.tanh(self.l3(a))
-
-
-class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim):
-        super(Critic, self).__init__()
-
-        # Q1 architecture
-        self.l1 = nn.Linear(state_dim + action_dim, 256)
-        self.l2 = nn.Linear(256, 256)
-        self.l3 = nn.Linear(256, 1)
-
-        # Q2 architecture
-        self.l4 = nn.Linear(state_dim + action_dim, 256)
-        self.l5 = nn.Linear(256, 256)
-        self.l6 = nn.Linear(256, 1)
-
-    def forward(self, state, action):
-        sa = torch.cat([state, action], 1)
-
-        q1 = F.relu(self.l1(sa))
-        q1 = F.relu(self.l2(q1))
-        q1 = self.l3(q1)
-
-        q2 = F.relu(self.l4(sa))
-        q2 = F.relu(self.l5(q2))
-        q2 = self.l6(q2)
-        return q1, q2
-
-    def Q1(self, state, action):
-        sa = torch.cat([state, action], 1)
-
-        q1 = F.relu(self.l1(sa))
-        q1 = F.relu(self.l2(q1))
-        q1 = self.l3(q1)
-        return q1
-
-
-class TD3(object):
-    def __init__(
-            self,
-            state_dim,
-            action_dim,
-            max_action,
-            discount=0.99,
-            tau=0.005,
-            policy_noise=0.2,
-            noise_clip=0.5,
-            policy_freq=2
-    ):
-
-        self.actor = Actor(state_dim, action_dim, max_action).to(device)
+        self.actor = PolicyNetwork(state_dim, action_dim, max_action).to(device)
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=0.0005)
 
-        self.critic = Critic(state_dim, action_dim).to(device)
+        self.critic = ValueNetwork(state_dim, action_dim).to(device)
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=0.0005)
 
@@ -92,11 +48,32 @@ class TD3(object):
         state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         return self.actor(state).cpu().data.numpy().flatten()
 
-    def train(self, replay_buffer, batch_size=100):
+    def run(self, training_on, batch_queue, learner_w_queue, update_step):
+        time_start = time.time()
+        while update_step.value < self.num_train_steps:
+            if batch_queue.empty():
+                continue
+            batch = batch_queue.get()
+
+            self._update_step(batch, update_step, learner_w_queue)
+            update_step.value += 1
+            if update_step.value % 50 == 0:
+                print("Training step ", update_step.value)
+
+        training_on.value = 0
+        empty_torch_queue(learner_w_queue)
+
+        plot_rewards(self.log_dir)
+        duration_secs = time.time() - time_start
+        duration_h = duration_secs // 3600
+        duration_m = duration_secs % 3600 / 60
+        print(f"Exit learner. Training took: {duration_h:} h {duration_m:.3f} min")
+
+    def _update_step(self, batch, update_step, learner_w_queue):
         self.total_it += 1
 
         # Sample replay buffer
-        state, action, next_state, reward, not_done = replay_buffer.sample(batch_size)
+        state, action, next_state, reward, not_done = batch
 
         with torch.no_grad():
             # Select action according to policy and add clipped noise
@@ -141,3 +118,8 @@ class TD3(object):
 
             for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+
+        # Send updated learner to the queue
+        if not learner_w_queue.full():
+            params = [p.data.cpu().detach().numpy() for p in self.actor.parameters()]
+            learner_w_queue.put(params)

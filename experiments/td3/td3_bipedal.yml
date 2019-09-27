@@ -1,0 +1,33 @@
+env: BipedalWalker-v2
+model: TD3
+
+
+num_agents: 3
+seed: 2
+
+state_dims: 24
+action_dims: 4
+max_action: 1
+discount_rate: 0.99
+tau: 0.005
+policy_noise: 0.2
+policy_clip: 0.5
+policy_freq: 2
+expl_noise: 0.1
+batch_size: 256
+n_step_returns: 5
+
+max_timesteps: 2000
+max_ep_length: 2000
+
+update_agent_ep: 5
+steps_train: 15000
+
+replay_queue_size: 64
+batch_queue_size: 64
+
+device: cuda
+data_normalization_path:
+num_episode_save: 50
+results_path: results
+
