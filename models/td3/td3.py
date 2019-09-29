@@ -12,7 +12,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class LearnerTD3(object):
-    def __init__(self, config, log_dir):
+    def __init__(self, config, local_policy, target_policy, log_dir):
         self.config = config
         self.log_dir = log_dir
 
@@ -30,8 +30,8 @@ class LearnerTD3(object):
 
         self.num_train_steps = config["steps_train"]
 
-        self.actor = PolicyNetwork(state_dim, action_dim, max_action, dense_size).to(device)
-        self.actor_target = copy.deepcopy(self.actor)
+        self.actor = local_policy
+        self.actor_target = target_policy
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr_policy)
 
         self.critic = ValueNetwork(state_dim, action_dim, dense_size).to(device)
@@ -56,27 +56,26 @@ class LearnerTD3(object):
         state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         return self.actor(state).cpu().data.numpy().flatten()
 
-    def run(self, training_on, batch_queue, learner_w_queue, update_step):
+    def run(self, training_on, batch_queue, update_step):
         time_start = time.time()
         while update_step.value < self.num_train_steps:
             if batch_queue.empty():
                 continue
             batch = batch_queue.get()
 
-            self._update_step(batch, update_step, learner_w_queue)
+            self._update_step(batch, update_step)
             update_step.value += 1
             if update_step.value % 50 == 0:
                 print("Training step ", update_step.value)
 
         training_on.value = 0
-        empty_torch_queue(learner_w_queue)
 
         duration_secs = time.time() - time_start
         duration_h = duration_secs // 3600
         duration_m = duration_secs % 3600 / 60
         print(f"Exit learner. Training took: {duration_h:} h {duration_m:.3f} min")
 
-    def _update_step(self, batch, update_step, learner_w_queue):
+    def _update_step(self, batch, update_step):
         update_time = time.time()
 
         # Sample replay buffer
@@ -125,11 +124,6 @@ class LearnerTD3(object):
 
             for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
-
-        # Send updated learner to the queue
-        if not learner_w_queue.full():
-            params = [p.data.cpu().detach().numpy() for p in self.actor.parameters()]
-            learner_w_queue.put(params)
 
         if update_step.value % self.log_every == 0:
             step = update_step.value

@@ -14,7 +14,7 @@ from utils.exploration import create_epsilon_func
 
 class Agent(object):
 
-    def __init__(self, config, learner_w_queue, global_episode, n_agent=0, log_dir='', agent_type='exploration'):
+    def __init__(self, config, policy_network, global_episode, n_agent=0, log_dir='', agent_type='exploration'):
         print(f"Initializing agent {n_agent}...")
         self.config = config
         self.n_agent = n_agent
@@ -29,11 +29,7 @@ class Agent(object):
 
         # Create environment
         self.env_wrapper = create_env_wrapper(config)
-
-        self.learner_w_queue = learner_w_queue
-        self.actor = PolicyNetwork(state_dim=config["state_dims"], action_dim=config["action_dims"],
-                                   max_action=config["max_action"], dense_size=config["dense_size"])
-        self.actor.eval()
+        self.actor = policy_network
 
         # Logger
         log_dir = f"{log_dir}/{agent_type}-agent-{n_agent}"
@@ -70,10 +66,10 @@ class Agent(object):
             done = False
             while not done:
                 if self.agent_type == "exploration":
-                    action = (self.select_action(np.array(state)) + np.random.normal(0, self.config['max_action'] * self.config['expl_noise'], size=self.config['action_dims'])
+                    action = (self.select_action(state) + np.random.normal(0, self.config['max_action'] * self.config['expl_noise'], size=self.config['action_dims'])
                     ).clip(-self.max_action, self.max_action)
                 else:
-                    action = self.select_action(np.array(state))
+                    action = self.select_action(state)
 
                 next_state, (reward_orig, reward), done = self.env_wrapper.step(action)
 
@@ -127,8 +123,8 @@ class Agent(object):
                 self.save(f"local_episode_{self.local_episode}_reward_{best_reward:4f}")
 
             rewards.append(episode_reward)
-            if self.local_episode % self.config['update_agent_ep'] == 0:
-                self.update_actor_learner()
+            #if self.local_episode % self.config['update_agent_ep'] == 0:
+            #    self.update_actor_learner()
 
         # Save replay from the first agent only
         if self.n_agent == 0:
@@ -139,7 +135,7 @@ class Agent(object):
         print(f"Agent {self.n_agent} done.")
 
     def select_action(self, state):
-        state = torch.FloatTensor(state.reshape(1, -1)).to('cpu')
+        state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
         return self.actor(state).cpu().data.numpy().flatten()
 
     def save(self, checkpoint_name):

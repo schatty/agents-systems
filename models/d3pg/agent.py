@@ -15,7 +15,7 @@ from utils.exploration import create_epsilon_func
 
 class Agent(object):
 
-    def __init__(self, config, learner_w_queue, global_episode, n_agent=0, log_dir='', agent_type='exploration'):
+    def __init__(self, config, policy, global_episode, n_agent=0, log_dir='', agent_type='exploration'):
         print(f"Initializing agent {n_agent}...")
         self.config = config
         self.n_agent = n_agent
@@ -31,27 +31,11 @@ class Agent(object):
         self.ou_noise = OUNoise(self.env_wrapper.get_action_space())
         self.ou_noise.reset()
 
-        self.learner_w_queue = learner_w_queue
-        self.actor = PolicyNetwork(num_actions=self.config['action_dims'],
-                                   num_states=self.config['state_dims'],
-                                   hidden_size=self.config['dense_size'],
-                                   activation=config['policy_output_nonlinearity'],
-                                   device=config['device'])
-        self.actor.eval()
+        self.actor = policy
 
         # Logger
         log_dir = f"{log_dir}/{agent_type}-agent-{n_agent}"
         self.logger = Logger(log_dir)
-
-    def update_actor_learner(self):
-        """Update local actor to the actor from learner. """
-        if self.learner_w_queue.empty():
-            return
-        source = self.learner_w_queue.get()
-        target = self.actor
-        for target_param, source_param in zip(target.parameters(), source):
-            w = torch.tensor(source_param).float()
-            target_param.data.copy_(w)
 
     def run(self, training_on, replay_queue, update_step):
         # Initialise deque buffer to store experiences for N-step returns
@@ -144,8 +128,6 @@ class Agent(object):
                 self.save(f"local_episode_{self.local_episode}_reward_{best_reward:4f}")
 
             rewards.append(episode_reward)
-            if self.local_episode % self.config['update_agent_ep'] == 0:
-                self.update_actor_learner()
 
         # Save replay from the first agent only
         if self.n_agent == 0:

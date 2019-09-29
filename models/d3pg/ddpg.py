@@ -2,94 +2,20 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 import time
 
 from .utils import OUNoise
+from .networks import PolicyNetwork, ValueNetwork
 from env.utils import create_env_wrapper
 from utils.logger import Logger
 from utils.misc import empty_torch_queue
 
 
-class ValueNetwork(nn.Module):
-    """Critic - return Q value from given states and actions. """
-
-    def __init__(self, num_states, num_actions, hidden_size, init_w=3e-3, device='cuda'):
-        """
-        Args:
-            num_states (int): state dimension
-            num_actions (int): action dimension
-            hidden_size (int): number of neurons in hidden layers
-            init_w:
-        """
-        super(ValueNetwork, self).__init__()
-
-        self.linear1 = nn.Linear(num_states+num_actions, hidden_size)
-        self.linear2 = nn.Linear(hidden_size, hidden_size)
-        self.linear3 = nn.Linear(hidden_size, 1)
-
-        self.linear3.weight.data.uniform_(-init_w, init_w)
-        self.linear3.bias.data.uniform_(-init_w, init_w)
-
-        self.to(device)
-
-    def forward(self, state, action):
-        x = torch.cat([state, action], 1)
-        x = self.linear1(x)
-        x = F.leaky_relu(x)
-        x = self.linear2(x)
-        x = F.leaky_relu(x)
-        x = self.linear3(x)
-        return x
-
-
-class PolicyNetwork(nn.Module):
-    """Actor - return action value given states. """
-
-    def __init__(self, num_states, num_actions, hidden_size, init_w=3e-3, activation='tanh', device='cuda'):
-        """
-        Args:
-            num_states (int): state dimension
-            num_actions (action): action dimension
-            hidden_size (int): hidden size dimension
-            init_w (float): margins of initialization
-        """
-        super(PolicyNetwork, self).__init__()
-        assert activation in ['tanh', 'sigmoid']
-        self.device = device
-
-        self.linear1 = nn.Linear(num_states, hidden_size)
-        self.linear2 = nn.Linear(hidden_size, hidden_size)
-        self.linear3 = nn.Linear(hidden_size, num_actions)
-        self.linear3.weight.data.uniform_(-init_w, init_w)
-        self.linear3.bias.data.uniform_(-init_w, init_w)
-
-        if activation == 'tanh':
-            self.out_nonlinearity = torch.tanh
-        else:
-            self.out_nonlinearity = torch.sigmoid
-
-        self.to(device)
-
-    def forward(self, state):
-        x = self.linear1(state)
-        x = F.leaky_relu(x)
-        x = self.linear2(x)
-        x = F.leaky_relu(x)
-        x = self.linear3(x)
-        x = self.out_nonlinearity(x)
-        return x
-
-    def get_action(self, state):
-        state = torch.from_numpy(state).float().unsqueeze(0).to(self.device)
-        action = self.forward(state)
-        return action
-
 
 class LearnerD3PG(object):
     """Policy and value network update routine. """
 
-    def __init__(self, config, log_dir=''):
+    def __init__(self, config, local_policy, target_policy, log_dir=''):
         """
         Args:
             config (dict): configuration
@@ -123,9 +49,9 @@ class LearnerD3PG(object):
 
         # Value and policy nets
         self.value_net = ValueNetwork(state_dim, action_dim, hidden_dim, device=self.device)
-        self.policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim, activation=config['policy_output_nonlinearity'], device=self.device)
+        self.policy_net = local_policy
         self.target_value_net = ValueNetwork(state_dim, action_dim, hidden_dim, device=self.device)
-        self.target_policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim, activation=config['policy_output_nonlinearity'], device=self.device)
+        self.target_policy_net = target_policy
 
         for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
             target_param.data.copy_(param.data)
@@ -138,7 +64,7 @@ class LearnerD3PG(object):
 
         self.value_criterion = nn.MSELoss(reduction='none')
 
-    def ddpg_update(self, batch, update_step, learner_w_queue, min_value=-np.inf, max_value=np.inf):
+    def ddpg_update(self, batch, update_step, min_value=-np.inf, max_value=np.inf):
         update_time = time.time()
         state, action, reward, next_state, done, gammas, weights, inds = batch
 
@@ -180,10 +106,6 @@ class LearnerD3PG(object):
         policy_loss.backward()
         self.policy_optimizer.step()
 
-        if not learner_w_queue.full():
-            params = [p.data.cpu().detach().numpy() for p in self.policy_net.parameters()]
-            learner_w_queue.put(params)
-
         # Soft update
         for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
             target_param.data.copy_(
@@ -201,20 +123,19 @@ class LearnerD3PG(object):
             self.logger.scalar_summary("learner/policy_loss", policy_loss.item(), step)
             self.logger.scalar_summary("learner/learner_update_timing", time.time() - update_time, step)
 
-    def run(self, training_on, batch_queue, learner_w_queue, update_step):
+    def run(self, training_on, batch_queue, update_step):
         time_start = time.time()
         while update_step.value < self.num_train_steps:
             if batch_queue.empty():
                 continue
             batch = batch_queue.get()
 
-            self.ddpg_update(batch, update_step, learner_w_queue)
+            self.ddpg_update(batch, update_step)
             update_step.value += 1
             if update_step.value % 50 == 0:
                 print("Training step ", update_step.value)
 
         training_on.value = 0
-        empty_torch_queue(learner_w_queue)
 
         duration_secs = time.time() - time_start
         duration_h = duration_secs // 3600
