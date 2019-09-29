@@ -4,12 +4,12 @@ import torch.nn.functional as F
 
 
 class PolicyNetwork(nn.Module):
-    def __init__(self, state_dim, action_dim, max_action):
+    def __init__(self, state_dim, action_dim, max_action, dense_size):
         super(PolicyNetwork, self).__init__()
 
-        self.l1 = nn.Linear(state_dim, 256)
-        self.l2 = nn.Linear(256, 256)
-        self.l3 = nn.Linear(256, action_dim)
+        self.l1 = nn.Linear(state_dim, dense_size)
+        self.l2 = nn.Linear(dense_size, dense_size)
+        self.l3 = nn.Linear(dense_size, action_dim)
 
         self.max_action = max_action
 
@@ -20,18 +20,18 @@ class PolicyNetwork(nn.Module):
 
 
 class ValueNetwork(nn.Module):
-    def __init__(self, state_dim, action_dim):
+    def __init__(self, state_dim, action_dim, dense_size):
         super(ValueNetwork, self).__init__()
 
         # Q1 architecture
-        self.l1 = nn.Linear(state_dim + action_dim, 256)
-        self.l2 = nn.Linear(256, 256)
-        self.l3 = nn.Linear(256, 1)
+        self.l1 = nn.Linear(state_dim + action_dim, dense_size)
+        self.l2 = nn.Linear(dense_size, dense_size)
+        self.l3 = nn.Linear(dense_size, 1)
 
         # Q2 architecture
-        self.l4 = nn.Linear(state_dim + action_dim, 256)
-        self.l5 = nn.Linear(256, 256)
-        self.l6 = nn.Linear(256, 1)
+        self.l4 = nn.Linear(state_dim + action_dim, dense_size)
+        self.l5 = nn.Linear(dense_size, dense_size)
+        self.l6 = nn.Linear(dense_size, 1)
 
     def forward(self, state, action):
         sa = torch.cat([state, action], 1)

@@ -3,7 +3,7 @@ import time
 import torch
 import torch.nn.functional as F
 
-from utils.reward_plot import plot_rewards
+from utils.logger import Logger
 from utils.misc import empty_torch_queue
 from .networks import PolicyNetwork, ValueNetwork
 
@@ -19,21 +19,24 @@ class LearnerTD3(object):
         state_dim = config["state_dims"]
         action_dim = config["action_dims"]
         max_action = config["max_action"]
+        dense_size = config["dense_size"]
         discount = config["discount_rate"]
         tau = config["tau"]
+        lr_policy = config["actor_learning_rate"]
+        lr_value = config["critic_learning_rate"]
         policy_noise = config["policy_noise"]
         noise_clip = config["policy_clip"]
         policy_freq = config["policy_freq"]
 
         self.num_train_steps = config["steps_train"]
 
-        self.actor = PolicyNetwork(state_dim, action_dim, max_action).to(device)
+        self.actor = PolicyNetwork(state_dim, action_dim, max_action, dense_size).to(device)
         self.actor_target = copy.deepcopy(self.actor)
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=0.0005)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr_policy)
 
-        self.critic = ValueNetwork(state_dim, action_dim).to(device)
+        self.critic = ValueNetwork(state_dim, action_dim, dense_size).to(device)
         self.critic_target = copy.deepcopy(self.critic)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=0.0005)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr_value)
 
         self.max_action = max_action
         self.discount = discount
@@ -43,6 +46,11 @@ class LearnerTD3(object):
         self.policy_freq = policy_freq
 
         self.total_it = 0
+
+        log_dir = f"{log_dir}/learner"
+        self.logger = Logger(log_dir)
+        # training step to log
+        self.log_every = [1, self.num_train_steps // 1000][self.num_train_steps > 1000]
 
     def select_action(self, state):
         state = torch.FloatTensor(state.reshape(1, -1)).to(device)
@@ -63,14 +71,13 @@ class LearnerTD3(object):
         training_on.value = 0
         empty_torch_queue(learner_w_queue)
 
-        plot_rewards(self.log_dir)
         duration_secs = time.time() - time_start
         duration_h = duration_secs // 3600
         duration_m = duration_secs % 3600 / 60
         print(f"Exit learner. Training took: {duration_h:} h {duration_m:.3f} min")
 
     def _update_step(self, batch, update_step, learner_w_queue):
-        self.total_it += 1
+        update_time = time.time()
 
         # Sample replay buffer
         state, action, next_state, reward, not_done = batch
@@ -94,22 +101,22 @@ class LearnerTD3(object):
         current_Q1, current_Q2 = self.critic(state, action)
 
         # Compute critic loss
-        critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
+        value_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
 
         # Optimize the critic
         self.critic_optimizer.zero_grad()
-        critic_loss.backward()
+        value_loss.backward()
         self.critic_optimizer.step()
 
         # Delayed policy updates
         if self.total_it % self.policy_freq == 0:
 
-            # Compute actor losse
-            actor_loss = -self.critic.Q1(state, self.actor(state)).mean()
+            # Compute actor loss
+            policy_loss = -self.critic.Q1(state, self.actor(state)).mean()
 
             # Optimize the actor
             self.actor_optimizer.zero_grad()
-            actor_loss.backward()
+            policy_loss.backward()
             self.actor_optimizer.step()
 
             # Update the frozen target models
@@ -123,3 +130,11 @@ class LearnerTD3(object):
         if not learner_w_queue.full():
             params = [p.data.cpu().detach().numpy() for p in self.actor.parameters()]
             learner_w_queue.put(params)
+
+        if update_step.value % self.log_every == 0:
+            step = update_step.value
+            self.logger.scalar_summary("learner/value_loss", value_loss.item(), step)
+            self.logger.scalar_summary("learner/policy_loss", policy_loss.item(), step)
+            self.logger.scalar_summary("learner/learner_update_timing", time.time() - update_time, step)
+
+        self.total_it += 1

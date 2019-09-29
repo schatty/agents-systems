@@ -1,33 +1,37 @@
+# Environment parameters
 env: BipedalWalker-v2
-model: TD3
-
-
-num_agents: 3
-seed: 2
-
+random_seed: 2019
+num_agents: 2
+num_exploiters: 1
 state_dims: 24
 action_dims: 4
+
+# Training parameters
+model: TD3
+batch_size: 256
+steps_train: 50000
+max_ep_length: 2000
 max_action: 1
 discount_rate: 0.99
-tau: 0.005
+tau: 0.001
 policy_noise: 0.2
 policy_clip: 0.5
 policy_freq: 2
 expl_noise: 0.1
-batch_size: 256
-n_step_returns: 5
-
-max_timesteps: 2000
-max_ep_length: 2000
-
-update_agent_ep: 5
-steps_train: 15000
-
+n_step_returns: 1
+update_agent_ep: 1
 replay_queue_size: 64
 batch_queue_size: 64
-
 device: cuda
 data_normalization_path:
 num_episode_save: 50
+
+# Network parameters
+critic_learning_rate: 0.0005
+actor_learning_rate: 0.0005
+dense_size: 300
+policy_output_nonlinearity: tanh
+
+# Miscellaneous
 results_path: results
 

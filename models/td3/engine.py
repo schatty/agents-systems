@@ -33,8 +33,8 @@ def sampler_worker(config, replay_queue, batch_queue, training_on,
     log_every = [1, num_steps_train // 1000][num_steps_train > 1000]
 
     # Logger
-    fn = f"{log_dir}/data_struct.pkl"
-    logger = Logger(log_path=fn)
+    log_dir = f"{log_dir}/data_struct"
+    logger = Logger(log_dir=log_dir)
 
     # Create replay buffer
     replay_buffer = ReplayBuffer(state_dim=config["state_dims"], action_dim=config["action_dims"])
@@ -62,22 +62,23 @@ def sampler_worker(config, replay_queue, batch_queue, training_on,
 
         # Log data structures sizes
         if update_step.value % log_every == 0:
-            logger.scalar_summary("global_episode", global_episode.value)
-            logger.scalar_summary("replay_queue", replay_queue.qsize())
-            logger.scalar_summary("batch_queue", batch_queue.qsize())
-            logger.scalar_summary("replay_buffer", len(replay_buffer))
+            step = global_episode.value
+            logger.scalar_summary("data_struct/replay_queue", replay_queue.qsize(), step)
+            logger.scalar_summary("data_struct/batch_queue", batch_queue.qsize(), step)
+            logger.scalar_summary("data_struct/replay_buffer", len(replay_buffer), step)
 
     empty_torch_queue(batch_queue)
     print("Replay buffer final size: ", len(replay_buffer))
     print("Stop sampler worker.")
 
 
-def agent_worker(config, learner_w_queue, global_episode, n_agent, log_dir, training_on, replay_queue, update_step):
+def agent_worker(config, learner_w_queue, global_episode, n_agent, log_dir, training_on, replay_queue, update_step, agent_type):
     agent = Agent(config,
                   learner_w_queue,
                   global_episode=global_episode,
                   n_agent=n_agent,
-                  log_dir=log_dir)
+                  log_dir=log_dir,
+                  agent_type=agent_type)
     agent.run(training_on, replay_queue, update_step)
 
 
@@ -103,6 +104,7 @@ class ExperimentEngine(object):
         replay_queue_size = config['replay_queue_size']
         batch_queue_size = config['batch_queue_size']
         n_agents = config['num_agents']
+        n_exploiters = config['num_exploiters']
 
         # Data structures
         processes = []
@@ -125,11 +127,18 @@ class ExperimentEngine(object):
                                    learner_w_queue, update_step))
         processes.append(p)
 
-        # Agents (exploration processes)
-        for i in range(n_agents):
+        # Agents (exploitation processes)
+        for i in range(n_exploiters):
             p = torch_mp.Process(target=agent_worker,
                                  args=(self.config, learner_w_queue, global_episode, i,
-                                       self.experiment_dir, training_on, replay_queue, update_step))
+                                       self.experiment_dir, training_on, replay_queue, update_step, "exploitation"))
+            processes.append(p)
+
+        # Agents (exploration processes)
+        for i in range(n_exploiters, n_exploiters+n_agents):
+            p = torch_mp.Process(target=agent_worker,
+                                 args=(self.config, learner_w_queue, global_episode, i,
+                                       self.experiment_dir, training_on, replay_queue, update_step, "exploration"))
             processes.append(p)
 
         for p in processes:

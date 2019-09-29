@@ -14,7 +14,7 @@ from utils.exploration import create_epsilon_func
 
 class Agent(object):
 
-    def __init__(self, config, learner_w_queue, global_episode, n_agent=0, log_dir=''):
+    def __init__(self, config, learner_w_queue, global_episode, n_agent=0, log_dir='', agent_type='exploration'):
         print(f"Initializing agent {n_agent}...")
         self.config = config
         self.n_agent = n_agent
@@ -24,6 +24,7 @@ class Agent(object):
         self.local_episode = 0
         self.log_dir = log_dir
         self.max_action = config['max_action']
+        self.agent_type = agent_type
         self.device = config["device"]
 
         # Create environment
@@ -31,12 +32,12 @@ class Agent(object):
 
         self.learner_w_queue = learner_w_queue
         self.actor = PolicyNetwork(state_dim=config["state_dims"], action_dim=config["action_dims"],
-                                   max_action=config["max_action"])
+                                   max_action=config["max_action"], dense_size=config["dense_size"])
         self.actor.eval()
 
         # Logger
-        log_path = f"{log_dir}/agent-{n_agent}.pkl"
-        self.logger = Logger(log_path)
+        log_dir = f"{log_dir}/{agent_type}-agent-{n_agent}"
+        self.logger = Logger(log_dir)
 
     def update_actor_learner(self):
         """Update local actor to the actor from learner. """
@@ -68,12 +69,11 @@ class Agent(object):
             state = self.env_wrapper.reset()
             done = False
             while not done:
-                #action = self.actor.get_action(state)
-                #action = self.ou_noise.get_action(action, num_steps)
-                #action = action.squeeze(0)
-
-                action = (self.select_action(np.array(state)) + np.random.normal(0, self.config['max_action'] * self.config['expl_noise'], size=self.config['action_dims'])
-                ).clip(-self.max_action, self.max_action)
+                if self.agent_type == "exploration":
+                    action = (self.select_action(np.array(state)) + np.random.normal(0, self.config['max_action'] * self.config['expl_noise'], size=self.config['action_dims'])
+                    ).clip(-self.max_action, self.max_action)
+                else:
+                    action = self.select_action(np.array(state))
 
                 next_state, (reward_orig, reward), done = self.env_wrapper.step(action)
 
@@ -116,9 +116,9 @@ class Agent(object):
                 num_steps += 1
 
             # Log metrics
-            self.logger.scalar_summary("update_step", update_step.value)
-            self.logger.scalar_summary("reward", episode_reward)
-            self.logger.scalar_summary("episode_timing", time.time() - ep_start_time)
+            step = update_step.value
+            self.logger.scalar_summary("agent/reward", episode_reward, step)
+            self.logger.scalar_summary("agent/episode_timing", time.time() - ep_start_time, step)
 
             # Saving agent
             if self.local_episode % self.num_episode_save == 0 or episode_reward > best_reward:
@@ -160,7 +160,7 @@ class Agent(object):
         state = self.env_wrapper.reset()
         for step in range(self.max_steps):
             action = self.select_action(state)
-            action = action.cpu().detach().numpy()
+            #action = action.cpu().detach().numpy()
             next_state, reward, done = self.env_wrapper.step(action)
             img = self.env_wrapper.render()
             plt.imsave(fname=f"{dir_name}/{step}.png", arr=img)
