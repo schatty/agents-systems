@@ -15,7 +15,7 @@ from utils.exploration import create_epsilon_func
 
 class Agent(object):
 
-    def __init__(self, config, learner_w_queue, global_episode, n_agent=0, log_dir=''):
+    def __init__(self, config, learner_w_queue, global_episode, n_agent=0, log_dir='', agent_type='exploration'):
         print(f"Initializing agent {n_agent}...")
         self.config = config
         self.n_agent = n_agent
@@ -24,6 +24,7 @@ class Agent(object):
         self.global_episode = global_episode
         self.local_episode = 0
         self.log_dir = log_dir
+        self.agent_type = agent_type
 
         # Create environment
         self.env_wrapper = create_env_wrapper(config)
@@ -39,8 +40,8 @@ class Agent(object):
         self.actor.eval()
 
         # Logger
-        log_path = f"{log_dir}/agent-{n_agent}.pkl"
-        self.logger = Logger(log_path)
+        log_dir = f"{log_dir}/{agent_type}-agent-{n_agent}"
+        self.logger = Logger(log_dir)
 
     def update_actor_learner(self):
         """Update local actor to the actor from learner. """
@@ -76,16 +77,20 @@ class Agent(object):
             ep_start_time = time.time()
             state = self.env_wrapper.reset()
             self.ou_noise.reset()
+            epsilon_chance = 0.0
             done = False
             while not done:
-                epsilon_chance = epsilon_func(update_step.value)
-                rand_n = np.random.random()
-                if rand_n < epsilon_chance:
-                    action = np.random.random(self.config['action_dims'])
+                if self.agent_type == "exploration":
+                    epsilon_chance = epsilon_func(update_step.value)
+                    rand_n = np.random.random()
+                    if rand_n < epsilon_chance:
+                        action = np.random.random(self.config['action_dims'])
+                    else:
+                        action = self.actor.get_action(state)
+                        action = self.ou_noise.get_action(action, num_steps)
+                        action = action.squeeze(0)
                 else:
-                    action = self.actor.get_action(state)
-                    action = self.ou_noise.get_action(action, num_steps)
-                    action = action.squeeze(0)
+                    action = self.actor.get_action(state).detach().cpu().numpy().flatten()
                 next_state, (reward_orig, reward), done = self.env_wrapper.step(action)
 
                 episode_reward += reward
@@ -127,10 +132,10 @@ class Agent(object):
                 num_steps += 1
 
             # Log metrics
-            self.logger.scalar_summary("update_step", update_step.value)
-            self.logger.scalar_summary("reward", episode_reward)
-            self.logger.scalar_summary("episode_timing", time.time() - ep_start_time)
-            self.logger.scalar_summary("epsilon", epsilon_chance)
+            step = update_step.value
+            self.logger.scalar_summary("agent/reward", episode_reward, step)
+            self.logger.scalar_summary("agent/episode_timing", time.time() - ep_start_time, step)
+            self.logger.scalar_summary("agent/epsilon", epsilon_chance, step)
 
             # Saving agent
             if self.local_episode % self.num_episode_save == 0 or episode_reward > best_reward:

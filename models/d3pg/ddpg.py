@@ -8,7 +8,6 @@ import time
 from .utils import OUNoise
 from env.utils import create_env_wrapper
 from utils.logger import Logger
-from utils.reward_plot import plot_rewards
 from utils.misc import empty_torch_queue
 
 
@@ -114,8 +113,8 @@ class LearnerD3PG(object):
         # training step to log
         self.log_every = [1, self.num_train_steps // 1000][self.num_train_steps > 1000]
 
-        log_path = f"{log_dir}/learner.pkl"
-        self.logger = Logger(log_path)
+        log_dir = f"{log_dir}/learner"
+        self.logger = Logger(log_dir)
 
         # Noise process
         env = create_env_wrapper(config)
@@ -197,10 +196,10 @@ class LearnerD3PG(object):
             )
 
         if update_step.value % self.log_every == 0:
-            self.logger.scalar_summary("update_step", update_step.value)
-            self.logger.scalar_summary("value_loss", value_loss.item())
-            self.logger.scalar_summary("policy_loss", policy_loss.item())
-            self.logger.scalar_summary("learner_update_timing", time.time() - update_time)
+            step = update_step.value
+            self.logger.scalar_summary("learner/value_loss", value_loss.item(), step)
+            self.logger.scalar_summary("learner/policy_loss", policy_loss.item(), step)
+            self.logger.scalar_summary("learner/learner_update_timing", time.time() - update_time, step)
 
     def run(self, training_on, batch_queue, learner_w_queue, update_step):
         time_start = time.time()
@@ -217,7 +216,6 @@ class LearnerD3PG(object):
         training_on.value = 0
         empty_torch_queue(learner_w_queue)
 
-        plot_rewards(self.log_dir)
         duration_secs = time.time() - time_start
         duration_h = duration_secs // 3600
         duration_m = duration_secs % 3600 / 60
