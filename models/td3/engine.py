@@ -58,9 +58,6 @@ def sampler_worker(config, replay_queue, batch_queue, training_on,
             batch = replay_buffer.sample(batch_size)
             batch_queue.put(batch)
 
-        if update_step.value % 1000 == 0:
-            print("Step: ", update_step.value, " buffer: ", len(replay_buffer))
-
         # Log data structures sizes
         if update_step.value % log_every == 0:
             step = global_episode.value

@@ -24,6 +24,8 @@ class Agent(object):
         self.local_episode = 0
         self.log_dir = log_dir
         self.max_action = config['max_action']
+        self.min_action = config['min_action']
+        self.expl_noise_mean = config['explr_noise_mean']
         self.agent_type = agent_type
         self.device = config["device"]
 
@@ -66,8 +68,8 @@ class Agent(object):
             done = False
             while not done:
                 if self.agent_type == "exploration":
-                    action = (self.select_action(state) + np.random.normal(0, self.config['max_action'] * self.config['expl_noise'], size=self.config['action_dims'])
-                    ).clip(-self.max_action, self.max_action)
+                    action = (self.select_action(state) + np.random.normal(self.expl_noise_mean, self.max_action * self.config['expl_noise'], size=self.config['action_dims'])
+                    ).clip(self.min_action, self.max_action)
                 else:
                     action = self.select_action(state)
 
@@ -135,7 +137,7 @@ class Agent(object):
         print(f"Agent {self.n_agent} done.")
 
     def select_action(self, state):
-        state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
+        state = torch.from_numpy(state.reshape(1, -1)).float().to(self.device)
         return self.actor(state).cpu().data.numpy().flatten()
 
     def save(self, checkpoint_name):

@@ -19,6 +19,7 @@ class LearnerTD3(object):
         state_dim = config["state_dims"]
         action_dim = config["action_dims"]
         max_action = config["max_action"]
+        min_action = config["min_action"]
         dense_size = config["dense_size"]
         discount = config["discount_rate"]
         tau = config["tau"]
@@ -39,6 +40,7 @@ class LearnerTD3(object):
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr_value)
 
         self.max_action = max_action
+        self.min_action = min_action
         self.discount = discount
         self.tau = tau
         self.policy_noise = policy_noise
@@ -89,7 +91,7 @@ class LearnerTD3(object):
 
             next_action = (
                     self.actor_target(next_state) + noise
-            ).clamp(-self.max_action, self.max_action)
+            ).clamp(self.min_action, self.max_action)
 
             # Compute the target Q value
             target_Q1, target_Q2 = self.critic_target(next_state, next_action)
@@ -109,13 +111,12 @@ class LearnerTD3(object):
 
         # Delayed policy updates
         if self.total_it % self.policy_freq == 0:
-
             # Compute actor loss
-            policy_loss = -self.critic.Q1(state, self.actor(state)).mean()
+            self.policy_loss = -self.critic.Q1(state, self.actor(state)).mean()
 
             # Optimize the actor
             self.actor_optimizer.zero_grad()
-            policy_loss.backward()
+            self.policy_loss.backward()
             self.actor_optimizer.step()
 
             # Update the frozen target models
@@ -128,7 +129,7 @@ class LearnerTD3(object):
         if update_step.value % self.log_every == 0:
             step = update_step.value
             self.logger.scalar_summary("learner/value_loss", value_loss.item(), step)
-            self.logger.scalar_summary("learner/policy_loss", policy_loss.item(), step)
+            self.logger.scalar_summary("learner/policy_loss", self.policy_loss.item(), step)
             self.logger.scalar_summary("learner/learner_update_timing", time.time() - update_time, step)
 
         self.total_it += 1

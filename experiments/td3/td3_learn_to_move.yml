@@ -3,23 +3,26 @@ env: LearnToMove
 random_seed: 2019
 num_agents: 2
 num_exploiters: 1
-state_dims: 147
+state_dims: 99
 action_dims: 22
+visualize: 0
 
 # Training parameters
 model: TD3
 batch_size: 256
-steps_train: 500000
+steps_train: 1_000_000
 max_ep_length: 2000
 max_action: 1
 min_action: 0
 discount_rate: 0.99
 tau: 0.001
+
 policy_noise: 0.2
-policy_noise_mean: 0.5
 policy_clip: 0.5
 policy_freq: 2
 expl_noise: 0.1
+explr_noise_mean: 0.5
+
 n_step_returns: 1
 update_agent_ep: 1
 replay_queue_size: 64
