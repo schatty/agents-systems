@@ -55,6 +55,7 @@ class Agent(object):
         rewards = []
         while training_on.value:
             episode_reward = 0
+            episode_reward_orig = 0
             num_steps = 0
             self.local_episode += 1
             self.global_episode.value += 1
@@ -76,6 +77,7 @@ class Agent(object):
                 next_state, (reward_orig, reward), done = self.env_wrapper.step(action)
 
                 episode_reward += reward
+                episode_reward_orig += reward_orig
                 self.exp_buffer.append((state, action, reward))
 
                 # We need at least N steps in the experience buffer before we can compute Bellman
@@ -116,6 +118,7 @@ class Agent(object):
             # Log metrics
             step = update_step.value
             self.logger.scalar_summary("agent/reward", episode_reward, step)
+            self.logger.scalar_summary("agent/reward_orig", episode_reward_orig, step)
             self.logger.scalar_summary("agent/episode_timing", time.time() - ep_start_time, step)
 
             # Saving agent
@@ -125,8 +128,6 @@ class Agent(object):
                 self.save(f"local_episode_{self.local_episode}_reward_{best_reward:4f}")
 
             rewards.append(episode_reward)
-            #if self.local_episode % self.config['update_agent_ep'] == 0:
-            #    self.update_actor_learner()
 
         # Save replay from the first agent only
         if self.n_agent == 0:

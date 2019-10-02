@@ -49,6 +49,22 @@ class ObservationTransformer(object):
         return features
 
 
+class RewardTransformer(object):
+    def __init__(self):
+        pass
+
+    def transform(self, reward_orig, obs):
+        r_leg = np.clip(np.abs(obs['r_leg']['joint']['hip']), 0, 0.5) / 0.5
+        l_leg = np.clip(np.abs(obs['l_leg']['joint']['hip']), 0, 0.5) / 0.5
+
+        r_leg /= 100.
+        l_leg /= 100.
+
+        reward = reward_orig + r_leg + l_leg
+
+        return reward
+
+
 class LearnToMove(EnvWrapper):
     def __init__(self, config):
         super(LearnToMove, self).__init__(config)
@@ -56,15 +72,20 @@ class LearnToMove(EnvWrapper):
         self.env = L2M2019Env(visualize=bool(config['visualize']), integrator_accuracy=0.001)
         self.project = True # False - dict of size 14, True - dict of size 4
         self.env.reset(project=self.project)
+
         self.observation_transformer = ObservationTransformer()
+        self.reward_transformer = RewardTransformer()
 
     def step(self, action):
         obs, reward_orig, done, _ = self.env.step(action.flatten(), project=self.project)
+
+        reward_shaped = self.reward_transformer.transform(reward_orig, obs)
+
         done = self.transform_done(done, obs)
         obs = self.observation_transformer.transform(obs)
         obs = self.normalize_state(obs)
 
-        return obs, (reward_orig, reward_orig), done
+        return obs, (reward_orig, reward_shaped), done
 
     def get_action_space(self):
         class ActionSpace(object):
@@ -75,6 +96,8 @@ class LearnToMove(EnvWrapper):
         return ActionSpace()
 
     def transform_done(self, done, obs):
+        if obs['pelvis']['height'] < 0.7:
+            return 1
         return done
 
     def reset(self):
