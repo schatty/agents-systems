@@ -42,8 +42,11 @@ class ObservationTransformer(object):
         #target_v_field = observation['v_tgt_field'].flatten() # [2 x 11 x 11]
 
         # Fixed number
-        target_v_field = np.array([observation['v_tgt_field'][0, 5, 5], observation['v_tgt_field'][1, 5, 5]])
-        features += target_v_field.tolist()
+        if isinstance(observation['v_tgt_field'], np.ndarray):
+            target_v_field = np.array([observation['v_tgt_field'][0, 5, 5], observation['v_tgt_field'][1, 5, 5]])
+            features += target_v_field.tolist()
+        else:
+            features += [observation['v_tgt_field'][0][5][5], observation['v_tgt_field'][1][5][5]]
         features = np.asarray(features)
 
         return features
