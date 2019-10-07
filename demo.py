@@ -8,12 +8,11 @@ import torch
 from env.learn_to_move import ObservationTransformer
 
 # Create environment
-env = L2M2019Env(visualize=False)
+env = L2M2019Env(visualize=True)
 env.reset()
 observation = env.reset()
-print("Observation: ", observation['r_leg']['joint'])
+#print("Observation: ", observation['r_leg']['joint'])
 
-'''
 controller = torch.load("data/models/policy_network.pt", map_location=torch.device('cpu'))
 controller.device = 'cpu'
 
@@ -25,7 +24,8 @@ rewards = []
 total_reward = 0
 while True:
     observation = obs_transformer.transform(observation)
-    action = controller.get_action(observation).flatten().tolist()
+    observation = torch.tensor(observation).float()
+    action = controller(observation).flatten().tolist()
     [observation, reward, done, info] = env.step(action)
 
     #print("Pelvis: ", observation['pelvis'].keys())
@@ -43,4 +43,3 @@ while True:
         if not observation or len(rewards) == n_trials:
             break
 print(f"Mean reward from {n_trials} trials: {np.mean(rewards)}")
-'''
