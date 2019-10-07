@@ -135,6 +135,7 @@ class Agent(object):
 
         empty_torch_queue(replay_queue)
 
+        self.env_wrapper.close()
         print(f"Agent {self.n_agent} done.")
 
     def select_action(self, state):

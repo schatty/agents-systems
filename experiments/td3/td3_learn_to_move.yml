@@ -1,7 +1,7 @@
 # Environment parameters
 env: LearnToMove
 random_seed: 2019
-num_agents: 2
+num_agents: 3
 num_exploiters: 1
 state_dims: 99
 action_dims: 22

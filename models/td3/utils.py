@@ -1,4 +1,5 @@
 import numpy as np
+import pickle
 import torch
 
 
@@ -39,3 +40,13 @@ class ReplayBuffer(object):
 
 	def __len__(self):
 		return self.size
+
+	def save_obs_stats(self):
+		info = {
+			'min': np.min(self.state, axis=0),
+			'max': np.max(self.state, axis=0),
+			'mean': np.mean(self.state, axis=0),
+			'std': np.std(self.state, axis=0)
+		}
+		with open('/home/igor/replay_buffer_info.pkl', 'wb') as f:
+			pickle.dump(info, f)
