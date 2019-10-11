@@ -10,7 +10,7 @@ visualize: 0
 # Training parameters
 model: TD3
 batch_size: 256
-steps_train: 5_000_000
+steps_train: 10_000_000
 max_ep_length: 2000
 max_action: 1
 min_action: 0
@@ -28,7 +28,7 @@ update_agent_ep: 1
 replay_queue_size: 64
 batch_queue_size: 64
 device: cuda
-data_normalization_path:
+data_normalization_path: /home/igor/replay_buffer_stats.pkl
 num_episode_save: 50
 
 # Network parameters

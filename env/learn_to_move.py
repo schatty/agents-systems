@@ -82,7 +82,7 @@ class RewardTransformer(object):
         for joint in ["knee_l", "knee_r"]:
             # make this a penalty instead of a reward: range approx [-4, 0.3] * X
             # negative is bending correct way
-            penalty = (-1.0 * state_desc["joint_pos"][joint][0] - 0.5) * 0.5
+            penalty = (-1.0 * state_desc["joint_pos"][joint][0] - 0.5) * 0.5 / scale
             if penalty > 0.0:
                 penalty = 0.0
             reward_extra += penalty
@@ -211,3 +211,4 @@ class LearnToMove(EnvWrapper):
 
     def close(self):
         pass
+
