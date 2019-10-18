@@ -154,7 +154,7 @@ class RewardTransformer(object):
             reward_extra -= (diff_feet - 0.176) ** 2 * 10.0 / scale
 
         # cap penalty, trying to keep final reward in a range of [-11,10]
-        max_penalty = -5
+        max_penalty = -9
 
         if reward_extra < max_penalty:
             reward_extra = max_penalty

@@ -4,11 +4,7 @@ import torch
 import torch.nn.functional as F
 
 from utils.logger import Logger
-from utils.misc import empty_torch_queue
 from .networks import PolicyNetwork, ValueNetwork
-
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class LearnerTD3(object):
@@ -28,6 +24,7 @@ class LearnerTD3(object):
         policy_noise = config["policy_noise"]
         noise_clip = config["policy_clip"]
         policy_freq = config["policy_freq"]
+        self.device = config['device']
 
         self.num_train_steps = config["steps_train"]
 
@@ -35,7 +32,7 @@ class LearnerTD3(object):
         self.actor_target = target_policy
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr_policy)
 
-        self.critic = ValueNetwork(state_dim, action_dim, dense_size).to(device)
+        self.critic = ValueNetwork(state_dim, action_dim, dense_size).to(self.device)
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr_value)
 
@@ -55,7 +52,7 @@ class LearnerTD3(object):
         self.log_every = [1, self.num_train_steps // 1000][self.num_train_steps > 1000]
 
     def select_action(self, state):
-        state = torch.FloatTensor(state.reshape(1, -1)).to(device)
+        state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
         return self.actor(state).cpu().data.numpy().flatten()
 
     def run(self, training_on, batch_queue, update_step):
@@ -67,7 +64,7 @@ class LearnerTD3(object):
 
             self._update_step(batch, update_step)
             update_step.value += 1
-            if update_step.value % 200 == 0:
+            if update_step.value % 50 == 0:
                 print("Training step ", update_step.value)
 
         training_on.value = 0

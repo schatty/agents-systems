@@ -37,16 +37,6 @@ class Agent(object):
         log_dir = f"{log_dir}/{agent_type}-agent-{n_agent}"
         self.logger = Logger(log_dir)
 
-    def update_actor_learner(self):
-        """Update local actor to the actor from learner. """
-        if self.learner_w_queue.empty():
-            return
-        source = self.learner_w_queue.get()
-        target = self.actor
-        for target_param, source_param in zip(target.parameters(), source):
-            w = torch.tensor(source_param).float()
-            target_param.data.copy_(w)
-
     def run(self, training_on, replay_queue, update_step):
         # Initialise deque buffer to store experiences for N-step returns
         self.exp_buffer = deque()

@@ -66,7 +66,7 @@ def sampler_worker(config, replay_queue, batch_queue, training_on,
             logger.scalar_summary("data_struct/replay_buffer", len(replay_buffer), step)
 
     print("Saving buffer stats...")
-    replay_buffer.save_obs_stats()
+    #replay_buffer.save_obs_stats()
     print("Stats saved.")
 
     empty_torch_queue(batch_queue)
