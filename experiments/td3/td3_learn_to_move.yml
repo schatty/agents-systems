@@ -1,7 +1,7 @@
 # Environment parameters
 env: LearnToMove
 random_seed: 2019
-num_agents: 3
+num_agents: 7
 num_exploiters: 1
 state_dims: 99
 action_dims: 22
@@ -12,7 +12,7 @@ model: TD3
 batch_size: 256
 steps_train: 3_000
 max_ep_length: 2000
-max_action: 12
+max_action: 1
 min_action: 0
 discount_rate: 0.99
 tau: 0.001
@@ -27,7 +27,7 @@ n_step_returns: 1
 update_agent_ep: 1
 replay_queue_size: 64
 batch_queue_size: 64
-device: cpu
+device: cuda
 data_normalization_path: replay_buffer_stats.pkl
 num_episode_save: 50
 
