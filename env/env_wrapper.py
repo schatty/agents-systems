@@ -15,6 +15,9 @@ class EnvWrapper:
                 data = pickle.load(f)
                 self.obs_min = data['min']
                 self.obs_max = data['max']
+        else:
+            self.obs_min = 0
+            self.obs_max = 1
 
     def reset(self):
         state = self.env.reset()

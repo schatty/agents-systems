@@ -1,26 +1,28 @@
 # Environment parameters
-env: LearnToMove
+env: BipedalWalker-v2
 random_seed: 2019
-num_agents: 2
+num_agents: 3
 num_exploiters: 1
-state_dims: 147
-action_dims: 22
+state_dims: 24
+action_dims: 4
 
 # Training parameters
 model: TD3
 batch_size: 256
-steps_train: 500000
+steps_train: 500_000
 max_ep_length: 2000
 max_action: 1
-min_action: 0
+min_action: -1
 discount_rate: 0.99
-tau: 0.001
+tau: 0.005
+
 policy_noise: 0.2
-policy_noise_mean: 0.5
 policy_clip: 0.5
 policy_freq: 2
 expl_noise: 0.1
-n_step_returns: 1
+explr_noise_mean: 0.0
+
+n_step_returns: 5
 update_agent_ep: 1
 replay_queue_size: 64
 batch_queue_size: 64
@@ -32,7 +34,7 @@ num_episode_save: 50
 critic_learning_rate: 0.0005
 actor_learning_rate: 0.0005
 dense_size: 300
-policy_output_nonlinearity: sigmoid
+policy_output_nonlinearity: tanh
 
 # Miscellaneous
 results_path: results
