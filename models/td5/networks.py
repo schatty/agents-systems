@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -20,18 +21,20 @@ class PolicyNetwork(nn.Module):
 
 
 class ValueNetwork(nn.Module):
-    def __init__(self, state_dim, action_dim, dense_size):
+    def __init__(self, state_dim, action_dim, dense_size, v_min=0, v_max=100, num_atoms=50):
         super(ValueNetwork, self).__init__()
 
         # Q1 architecture
         self.l1 = nn.Linear(state_dim + action_dim, dense_size)
         self.l2 = nn.Linear(dense_size, dense_size)
-        self.l3 = nn.Linear(dense_size, 1)
+        self.l3 = nn.Linear(dense_size, num_atoms)
 
         # Q2 architecture
         self.l4 = nn.Linear(state_dim + action_dim, dense_size)
         self.l5 = nn.Linear(dense_size, dense_size)
-        self.l6 = nn.Linear(dense_size, 1)
+        self.l6 = nn.Linear(dense_size, num_atoms)
+
+        self.z_atoms = np.linspace(v_min, v_max, num_atoms)
 
     def forward(self, state, action):
         sa = torch.cat([state, action], 1)
@@ -52,3 +55,10 @@ class ValueNetwork(nn.Module):
         q1 = F.relu(self.l2(q1))
         q1 = self.l3(q1)
         return q1
+
+    def get_probs(self, state, action):
+        q1, q2 = self.forward(state, action)
+        return F.softmax(q1, dim=1), F.softmax(q2, dim=1)
+
+    def get_probs_q1(self, state, action):
+        return F.softmax(self.Q1(state, action), dim=1)

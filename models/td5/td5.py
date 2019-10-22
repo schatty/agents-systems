@@ -9,7 +9,7 @@ from .networks import PolicyNetwork, ValueNetwork
 from .utils import _l2_project
 
 
-class LearnerTD3(object):
+class LearnerTD5(object):
     def __init__(self, config, local_policy, target_policy, log_dir):
         self.config = config
         self.log_dir = log_dir
@@ -27,6 +27,8 @@ class LearnerTD3(object):
         noise_clip = config["policy_clip"]
         policy_freq = config["policy_freq"]
         self.device = config['device']
+        self.batch_size = config['batch_size']
+        self.gamma = config['discount_rate']
 
         self.num_train_steps = config["steps_train"]
 
@@ -82,7 +84,6 @@ class LearnerTD3(object):
         # Sample replay buffer
         state, action, next_state, reward, not_done = batch
 
-
         # ------- Update critic -------
 
         # Predict next actions with target policy network
@@ -96,7 +97,7 @@ class LearnerTD3(object):
         ).clamp(self.min_action, self.max_action)
 
         # Predict Z distribution with target value network
-        target_value = self.critic_target.get_probs(next_state, next_action.detach())
+        target_value = self.critic_target.get_probs_q1(next_state, next_action.detach())
         target_z_atoms = self.critic.z_atoms
 
         # Batch of z-atoms
@@ -119,9 +120,12 @@ class LearnerTD3(object):
         current_Q2 = current_Q2.to(self.device)
 
         target_Q = torch.autograd.Variable(target_z_projected, requires_grad=False).cuda()
+
+        #print("Shapes: ", current_Q1.shape, target_Q.shape)
+
         value_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
 
-        value_loss = value_loss.mean(axis=1)
+        #value_loss = value_loss.mean(axis=1)
 
         value_loss = value_loss.mean()
 
@@ -131,13 +135,13 @@ class LearnerTD3(object):
 
         # -------- Update actor -----------
         if self.total_it % self.policy_freq == 0:
-            policy_loss = self.critic.Q1(state, self.actor(state))
-            policy_loss = policy_loss * torch.tensor(self.critic.z_atoms).float().cuda()
-            policy_loss = torch.sum(policy_loss, dim=1)
-            policy_loss = -policy_loss.mean()
+            self.policy_loss = self.critic.Q1(state, self.actor(state))
+            self.policy_loss = self.policy_loss * torch.tensor(self.critic.z_atoms).float().cuda()
+            self.policy_loss = torch.sum(self.policy_loss, dim=1)
+            self.policy_loss = -self.policy_loss.mean()
 
             self.actor_optimizer.zero_grad()
-            policy_loss.backward()
+            self.policy_loss.backward()
             self.actor_optimizer.step()
 
             # Update the frozen target models

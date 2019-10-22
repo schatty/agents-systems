@@ -9,7 +9,7 @@ except RuntimeError:
 import os
 from shutil import copyfile
 
-from .td3 import LearnerTD3
+from .td5 import LearnerTD5
 from .agent import Agent
 from .networks import PolicyNetwork
 from utils.misc import read_config, empty_torch_queue
@@ -85,7 +85,7 @@ def agent_worker(config, policy_network, global_episode, n_agent, log_dir, train
 
 
 def learner_worker(config, local_policy, target_policy, log_dir, training_on, batch_queue, update_step):
-    learner = LearnerTD3(config, local_policy, target_policy, log_dir=log_dir)
+    learner = LearnerTD5(config, local_policy, target_policy, log_dir=log_dir)
     learner.run(training_on, batch_queue, update_step)
 
 
