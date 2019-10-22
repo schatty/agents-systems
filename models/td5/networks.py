@@ -21,7 +21,7 @@ class PolicyNetwork(nn.Module):
 
 
 class ValueNetwork(nn.Module):
-    def __init__(self, state_dim, action_dim, dense_size, v_min=0, v_max=100, num_atoms=50):
+    def __init__(self, state_dim, action_dim, dense_size, v_min=-100, v_max=300, num_atoms=16):
         super(ValueNetwork, self).__init__()
 
         # Q1 architecture

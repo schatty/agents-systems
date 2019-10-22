@@ -84,8 +84,8 @@ def agent_worker(config, learner_w_queue, global_episode, n_agent, log_dir, trai
     agent.run(training_on, replay_queue, update_step)
 
 
-def learner_worker(config, learner_w_queue, log_dir, training_on, batch_queue, update_step):
-    learner = LearnerTD5(config, learner_w_queue, log_dir=log_dir)
+def learner_worker(config, local_policy, target_policy, log_dir, training_on, batch_queue, update_step):
+    learner = LearnerTD5(config, local_policy, target_policy, log_dir=log_dir)
     learner.run(training_on, batch_queue, update_step)
 
 
@@ -124,21 +124,31 @@ class ExperimentEngine(object):
         processes.append(p)
 
         # Learner (neural net training process)
+        local_policy = PolicyNetwork(config["state_dims"], config["action_dims"], config["max_action"],
+                                     config["dense_size"])
+        local_policy.share_memory()
+        local_policy.to(config["device"])
+
+        target_policy = PolicyNetwork(config["state_dims"], config["action_dims"], config["max_action"],
+                                      config["dense_size"])
+        target_policy.share_memory()
+        target_policy.to(config["device"])
+
         p = torch_mp.Process(target=learner_worker,
-                             args=(config, learner_w_queue, self.experiment_dir, training_on, batch_queue, update_step))
+                             args=(config, local_policy, target_policy, self.experiment_dir, training_on, batch_queue, update_step))
         processes.append(p)
 
         # Agents (exploitation processes)
         for i in range(n_exploiters):
             p = torch_mp.Process(target=agent_worker,
-                                 args=(self.config, learner_w_queue, global_episode, i,
+                                 args=(self.config, target_policy, global_episode, i,
                                        self.experiment_dir, training_on, replay_queue, update_step, "exploitation"))
             processes.append(p)
 
         # Agents (exploration processes)
         for i in range(n_exploiters, n_exploiters+n_agents):
             p = torch_mp.Process(target=agent_worker,
-                                 args=(self.config, learner_w_queue, global_episode, i,
+                                 args=(self.config, local_policy, global_episode, i,
                                        self.experiment_dir, training_on, replay_queue, update_step, "exploration"))
             processes.append(p)
 

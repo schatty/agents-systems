@@ -9,7 +9,7 @@ action_dims: 4
 # Training parameters
 model: TD5
 batch_size: 256
-steps_train: 500_000
+steps_train: 100_000
 max_ep_length: 2000
 max_action: 1
 min_action: -1

@@ -1,7 +1,7 @@
 # Environment parameters
 env: LearnToMove
 random_seed: 2019
-num_agents: 7
+num_agents: 3
 num_exploiters: 1
 state_dims: 99
 action_dims: 22
@@ -10,7 +10,7 @@ visualize: 0
 # Training parameters
 model: TD3
 batch_size: 256
-steps_train: 3_000
+steps_train: 20_000_000
 max_ep_length: 2000
 max_action: 1
 min_action: 0
