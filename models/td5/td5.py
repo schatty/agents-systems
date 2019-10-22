@@ -126,7 +126,7 @@ class LearnerTD5(object):
                                          torch.from_numpy(self.critic.z_atoms).cpu().float())
 
         # Get current Q distr
-        current_Q1, current_Q2, current_Q3, current_Q4 = self.critic.get_probs(state, action)
+        #current_Q1, current_Q2, current_Q3, current_Q4 = self.critic.get_probs(state, action)
         current_Q1, current_Q2 = self.critic.get_probs(state, action)
 
         current_Q1 = current_Q1.to(self.device)
