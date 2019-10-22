@@ -14,7 +14,7 @@ from utils.exploration import create_epsilon_func
 
 class Agent(object):
 
-    def __init__(self, config, policy_network, global_episode, n_agent=0, log_dir='', agent_type='exploration'):
+    def __init__(self, config, learner_w_queue, global_episode, n_agent=0, log_dir='', agent_type='exploration'):
         print(f"Initializing agent {n_agent}...")
         self.config = config
         self.n_agent = n_agent
@@ -31,11 +31,23 @@ class Agent(object):
 
         # Create environment
         self.env_wrapper = create_env_wrapper(config)
-        self.actor = policy_network
+        self.actor = PolicyNetwork(config["state_dims"], config["action_dims"], config["max_action"], config["dense_size"])
+        self.actor.eval()
+        self.learner_w_queue = learner_w_queue
 
         # Logger
         log_dir = f"{log_dir}/{agent_type}-agent-{n_agent}"
         self.logger = Logger(log_dir)
+
+    def update_actor_learner(self):
+        """Update local actor to the actor from learner. """
+        if self.learner_w_queue.empty():
+            return
+        source = self.learner_w_queue.get()
+        target = self.actor
+        for target_param, source_param in zip(target.parameters(), source):
+            w = torch.tensor(source_param).float()
+            target_param.data.copy_(w)
 
     def run(self, training_on, replay_queue, update_step):
         # Initialise deque buffer to store experiences for N-step returns
@@ -111,6 +123,10 @@ class Agent(object):
             self.logger.scalar_summary("agent/reward_orig", episode_reward_orig, step)
             self.logger.scalar_summary("agent/episode_timing", time.time() - ep_start_time, step)
 
+            # Update actor policy from learner
+            if self.local_episode+1 % 50:
+                self.update_actor_learner()
+
             # Saving agent
             if self.local_episode % self.num_episode_save == 0 or episode_reward > best_reward:
                 if episode_reward > best_reward:
@@ -129,7 +145,7 @@ class Agent(object):
         print(f"Agent {self.n_agent} done.")
 
     def select_action(self, state):
-        state = torch.from_numpy(state.reshape(1, -1)).float().to(self.device)
+        state = torch.from_numpy(state.reshape(1, -1)).float()#.to(self.device)
         return self.actor(state).cpu().data.numpy().flatten()
 
     def save(self, checkpoint_name):

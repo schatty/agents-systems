@@ -10,7 +10,7 @@ from .utils import _l2_project
 
 
 class LearnerTD5(object):
-    def __init__(self, config, local_policy, target_policy, log_dir):
+    def __init__(self, config, local_policy, learner_w_queue, log_dir):
         self.config = config
         self.log_dir = log_dir
 
@@ -29,11 +29,12 @@ class LearnerTD5(object):
         self.device = config['device']
         self.batch_size = config['batch_size']
         self.gamma = config['discount_rate']
+        self.learner_w_queue = learner_w_queue
 
         self.num_train_steps = config["steps_train"]
 
         self.actor = local_policy
-        self.actor_target = target_policy
+        self.actor_target = PolicyNetwork(config["state_dims"], config["action_dims"], config["max_action"], config["dense_size"])
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr_policy)
 
         self.critic = ValueNetwork(state_dim, action_dim, dense_size).to(self.device)
@@ -70,6 +71,13 @@ class LearnerTD5(object):
             update_step.value += 1
             if update_step.value % 50 == 0:
                 print("Training step ", update_step.value)
+
+            if not self.learner_w_queue.full():
+                try:
+                    params = [p.data.cpu().detach().numpy() for p in self.actor.parameters()]
+                    self.learner_w_queue.put(params)
+                except:
+                    pass
 
         training_on.value = 0
 
