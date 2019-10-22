@@ -34,6 +34,16 @@ class ValueNetwork(nn.Module):
         self.l5 = nn.Linear(dense_size, dense_size)
         self.l6 = nn.Linear(dense_size, num_atoms)
 
+        # Q3 architecture
+        self.l7 = nn.Linear(state_dim + action_dim, dense_size)
+        self.l8 = nn.Linear(dense_size, dense_size)
+        self.l9 = nn.Linear(dense_size, num_atoms)
+
+        # Q4 architecture
+        self.l10 = nn.Linear(state_dim + action_dim, dense_size)
+        self.l11 = nn.Linear(dense_size, dense_size)
+        self.l12 = nn.Linear(dense_size, num_atoms)
+
         self.z_atoms = np.linspace(v_min, v_max, num_atoms)
 
     def forward(self, state, action):
@@ -46,7 +56,16 @@ class ValueNetwork(nn.Module):
         q2 = F.relu(self.l4(sa))
         q2 = F.relu(self.l5(q2))
         q2 = self.l6(q2)
-        return q1, q2
+
+        q3 = F.relu(self.l7(sa))
+        q3 = F.relu(self.l8(q3))
+        q3 = self.l9(q3)
+
+        q4 = F.relu(self.l10(sa))
+        q4 = F.relu(self.l11(q4))
+        q4 = self.l12(q4)
+
+        return q1, q2, q3, q4
 
     def Q1(self, state, action):
         sa = torch.cat([state, action], 1)
@@ -57,8 +76,8 @@ class ValueNetwork(nn.Module):
         return q1
 
     def get_probs(self, state, action):
-        q1, q2 = self.forward(state, action)
-        return F.softmax(q1, dim=1), F.softmax(q2, dim=1)
+        q1, q2, q3, q4 = self.forward(state, action)
+        return F.softmax(q1, dim=1), F.softmax(q2, dim=1), F.softmax(q3, dim=1), F.softmax(q4, dim=1)
 
     def get_probs_q1(self, state, action):
         return F.softmax(self.Q1(state, action), dim=1)

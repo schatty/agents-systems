@@ -183,13 +183,13 @@ class LearnToMove(EnvWrapper):
 
         #self.reward_transformer.reward_data.append(reward_orig)
 
-        reward_shaped = self.reward_transformer.transform(reward_orig, obs_train)
+        #reward_shaped = self.reward_transformer.transform(reward_orig, obs_train)
 
         done = self.transform_done(done, obs_eval)
         obs = self.observation_transformer.transform(obs_eval)
         obs = self.normalize_state(obs)
 
-        return obs, (reward_orig, reward_shaped), done
+        return obs, (reward_orig, reward_orig), done
 
     def get_action_space(self):
         class ActionSpace(object):

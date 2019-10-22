@@ -115,17 +115,16 @@ class LearnerTD5(object):
                                          torch.from_numpy(self.critic.z_atoms).cpu().float())
 
         # Get current Q distr
-        current_Q1, current_Q2 = self.critic.get_probs(state, action)
+        current_Q1, current_Q2, current_Q3, current_Q4 = self.critic.get_probs(state, action)
+
         current_Q1 = current_Q1.to(self.device)
         current_Q2 = current_Q2.to(self.device)
+        current_Q3 = current_Q3.to(self.device)
+        current_Q4 = current_Q4.to(self.device)
 
         target_Q = torch.autograd.Variable(target_z_projected, requires_grad=False).cuda()
 
-        #print("Shapes: ", current_Q1.shape, target_Q.shape)
-
-        value_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
-
-        #value_loss = value_loss.mean(axis=1)
+        value_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q) + F.mse_loss(current_Q3, target_Q) + F.mse_loss(current_Q4, target_Q)
 
         value_loss = value_loss.mean()
 
