@@ -10,7 +10,7 @@ from .utils import _l2_project
 
 
 class LearnerTD5(object):
-    def __init__(self, config, local_policy, learner_w_queue, log_dir):
+    def __init__(self, config, learner_w_queue, log_dir):
         self.config = config
         self.log_dir = log_dir
 
@@ -33,9 +33,12 @@ class LearnerTD5(object):
 
         self.num_train_steps = config["steps_train"]
 
-        self.actor = local_policy
-        self.actor_target = PolicyNetwork(config["state_dims"], config["action_dims"], config["max_action"], config["dense_size"])
+        self.actor = PolicyNetwork(config["state_dims"], config["action_dims"], config["max_action"], config["dense_size"])
+        self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr_policy)
+
+        self.actor.to(self.device)
+        self.actor_target.to(self.device)
 
         self.critic = ValueNetwork(state_dim, action_dim, dense_size).to(self.device)
         self.critic_target = copy.deepcopy(self.critic)
