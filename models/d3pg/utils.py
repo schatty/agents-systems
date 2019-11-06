@@ -1,29 +1,53 @@
+import os
 import numpy as np
+import pickle
 
 
-class OUNoise(object):
-    def __init__(self, action_space, mu=0.0, theta=0.15, max_sigma=0.3, min_sigma=0.3, decay_period=10_000):
-        self.mu = mu
-        self.theta = theta
-        self.sigma = max_sigma
-        self.max_sigma = max_sigma
-        self.min_sigma = min_sigma
-        self.decay_period = decay_period
-        self.action_dim = action_space.shape[0]
-        self.low = action_space.low
-        self.high = action_space.high
+class ReplayBuffer(object):
+	def __init__(self, state_dim, action_dim, max_size=int(1e6), save_dir="~"):
+		self.max_size = max_size
+		self.save_dir = save_dir
+		self.ptr = 0
+		self.size = 0
 
-    def reset(self):
-        self.state = np.ones(self.action_dim) * self.mu
+		self.state = np.zeros((max_size, state_dim))
+		self.action = np.zeros((max_size, action_dim))
+		self.next_state = np.zeros((max_size, state_dim))
+		self.reward = np.zeros((max_size, 1))
+		self.not_done = np.zeros((max_size, 1))
 
-    def evolve_state(self):
-        x = self.state
-        dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(self.action_dim)
-        self.state = x + dx
-        return self.state
+	def add(self, state, action, reward, next_state, done, *args):
+		self.state[self.ptr] = state
+		self.action[self.ptr] = action
+		self.next_state[self.ptr] = next_state
+		self.reward[self.ptr] = reward
+		self.not_done[self.ptr] = 1. - done
 
-    def get_action(self, action, t=0):
-        ou_state = self.evolve_state()
-        self.sigma = self.max_sigma - (self.max_sigma - self.min_sigma) * min(1.0, t/self.decay_period)
-        action = action.cpu().detach().numpy()
-        return np.clip(action + ou_state, self.low, self.high)
+		self.ptr = (self.ptr + 1) % self.max_size
+		self.size = min(self.size + 1, self.max_size)
+
+	def sample(self, batch_size):
+		ind = np.random.randint(0, self.size, size=batch_size)
+		return (
+			self.state[ind],
+			self.action[ind],
+			self.reward[ind],
+			self.next_state[ind],
+			self.not_done[ind]
+		)
+
+	def __len__(self):
+		return self.size
+
+	def dump(self):
+		fn = os.path.join(self.save_dir, 'replay_buffer.pkl')
+		buffer = {
+			'state': self.state,
+			'action': self.action,
+			'reward': self.reward,
+			'next_state': self.next_state,
+			'not_done': self.not_done
+		}
+		with open(fn, 'wb') as f:
+			pickle.dump(buffer, f)
+		print("Buffer dumped.")

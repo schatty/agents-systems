@@ -3,6 +3,7 @@ from datetime import datetime
 from multiprocessing import set_start_method
 import torch.multiprocessing as torch_mp
 import multiprocessing as mp
+import queue
 from time import sleep
 try:
     set_start_method('spawn')
@@ -14,12 +15,12 @@ from models.agent import Agent
 from utils.logger import Logger
 from utils.misc import empty_torch_queue
 
-from .d3pg import LearnerD3PG
+from .d4pg import LearnerD4PG
 from .networks import PolicyNetwork
-from .utils import ReplayBuffer
+from .replay_buffer import create_replay_buffer
 
 
-def sampler_worker(config, replay_queue, batch_queue, training_on,
+def sampler_worker(config, replay_queue, batch_queue, replay_priorities_queue, training_on,
                    global_episode, update_step, log_dir=''):
     """
     Function that transfers replay to the buffer and batches from buffer to the queue.
@@ -36,10 +37,7 @@ def sampler_worker(config, replay_queue, batch_queue, training_on,
     logger = Logger(f"{log_dir}/data_struct")
 
     # Create replay buffer
-    replay_buffer = ReplayBuffer(state_dim=config["state_dim"],
-                                 action_dim=config["action_dim"],
-                                 max_size=config["replay_mem_size"],
-                                 save_dir=config["results_path"])
+    replay_buffer = create_replay_buffer(config)
 
     while training_on.value:
         # (1) Transfer replays to global buffer
@@ -53,6 +51,12 @@ def sampler_worker(config, replay_queue, batch_queue, training_on,
             continue
 
         try:
+            inds, weights = replay_priorities_queue.get_nowait()
+            replay_buffer.update_priorities(inds, weights)
+        except queue.Empty:
+            pass
+
+        try:
             batch = replay_buffer.sample(batch_size)
             batch_queue.put_nowait(batch)
         except:
@@ -61,19 +65,22 @@ def sampler_worker(config, replay_queue, batch_queue, training_on,
 
         # Log data structures sizes
         step = update_step.value
-        logger.scalar_summary("data_struct/global_episode", global_episode.value, step)
+        logger.scalar_summary("data_stuct/global_episode", global_episode.value, step)
         logger.scalar_summary("data_struct/replay_queue", replay_queue.qsize(), step)
         logger.scalar_summary("data_struct/batch_queue", batch_queue.qsize(), step)
         logger.scalar_summary("data_struct/replay_buffer", len(replay_buffer), step)
+
+    if config['save_buffer_on_disk']:
+        replay_buffer.dump(config["results_path"])
 
     empty_torch_queue(batch_queue)
     print("Stop sampler worker.")
 
 
-def learner_worker(config, training_on, policy, target_policy_net, learner_w_queue,
+def learner_worker(config, training_on, policy, target_policy_net, learner_w_queue, replay_priority_queue,
                    batch_queue, update_step, experiment_dir):
-    learner = LearnerD3PG(config, policy, target_policy_net, learner_w_queue, log_dir=experiment_dir)
-    learner.run(training_on, batch_queue, update_step)
+    learner = LearnerD4PG(config, policy, target_policy_net, learner_w_queue, log_dir=experiment_dir)
+    learner.run(training_on, batch_queue, replay_priority_queue, update_step)
 
 
 def agent_worker(config, policy, learner_w_queue, global_episode, i, agent_type,
@@ -109,11 +116,12 @@ class Engine(object):
         update_step = mp.Value('i', 0)
         global_episode = mp.Value('i', 0)
         learner_w_queue = torch_mp.Queue(maxsize=n_agents)
+        replay_priorities_queue = mp.Queue(maxsize=64)
 
         # Data sampler
         batch_queue = mp.Queue(maxsize=batch_queue_size)
         p = torch_mp.Process(target=sampler_worker,
-                             args=(config, replay_queue, batch_queue, training_on,
+                             args=(config, replay_queue, batch_queue, replay_priorities_queue, training_on,
                                    global_episode, update_step, experiment_dir))
         processes.append(p)
 
@@ -123,11 +131,10 @@ class Engine(object):
         policy_net = copy.deepcopy(target_policy_net)
         policy_net_cpu = PolicyNetwork(config['state_dim'], config['action_dim'],
                                           config['dense_size'], device=config['agent_device'])
-
         target_policy_net.share_memory()
 
         p = torch_mp.Process(target=learner_worker, args=(config, training_on, policy_net, target_policy_net, learner_w_queue,
-                                                          batch_queue, update_step, experiment_dir))
+                                                          replay_priorities_queue, batch_queue, update_step, experiment_dir))
         processes.append(p)
 
         # Single agent for exploitation

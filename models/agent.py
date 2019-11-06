@@ -1,43 +1,54 @@
 import shutil
 import os
-import numpy as np
 import time
 from collections import deque
-import matplotlib.pyplot as plt
 import torch
 
-from .utils import OUNoise
-from .ddpg import PolicyNetwork
-from env.utils import create_env_wrapper
+from utils.misc import OUNoise, make_gif, empty_torch_queue
 from utils.logger import Logger
-from utils.misc import make_gif, empty_torch_queue
-from utils.exploration import create_epsilon_func
+from env.utils import create_env_wrapper
+
 
 class Agent(object):
 
-    def __init__(self, config, policy, global_episode, n_agent=0, log_dir='', agent_type='exploration'):
+    def __init__(self, config, policy, global_episode, n_agent=0, agent_type='exploration', log_dir=''):
         print(f"Initializing agent {n_agent}...")
         self.config = config
         self.n_agent = n_agent
+        self.agent_type = agent_type
         self.max_steps = config['max_ep_length']
         self.num_episode_save = config['num_episode_save']
         self.global_episode = global_episode
         self.local_episode = 0
         self.log_dir = log_dir
-        self.agent_type = agent_type
 
         # Create environment
         self.env_wrapper = create_env_wrapper(config)
-        self.ou_noise = OUNoise(self.env_wrapper.get_action_space())
+        self.ou_noise = OUNoise(dim=config["action_dim"], low=config["action_low"], high=config["action_high"])
         self.ou_noise.reset()
 
         self.actor = policy
+        print("Agent ", n_agent, self.actor.device)
 
         # Logger
-        log_dir = f"{log_dir}/{agent_type}-agent-{n_agent}"
-        self.logger = Logger(log_dir)
+        log_path = f"{log_dir}/agent-{n_agent}"
+        self.logger = Logger(log_path)
 
-    def run(self, training_on, replay_queue, update_step):
+    def update_actor_learner(self, learner_w_queue, training_on):
+        """Update local actor to the actor from learner. """
+        if not training_on.value:
+            return
+        try:
+            source = learner_w_queue.get_nowait()
+        except:
+            return
+        target = self.actor
+        for target_param, source_param in zip(target.parameters(), source):
+            w = torch.tensor(source_param).float()
+            target_param.data.copy_(w)
+        del source
+
+    def run(self, training_on, replay_queue, learner_w_queue, update_step):
         # Initialise deque buffer to store experiences for N-step returns
         self.exp_buffer = deque()
 
@@ -46,11 +57,6 @@ class Agent(object):
         while training_on.value:
             episode_reward = 0
             num_steps = 0
-            epsilon_func = create_epsilon_func(self.config['epsilon_mode'],
-                                               initial_value=self.config['epsilon_initial_value'],
-                                               final_value=self.config['epsilon_final_value'],
-                                               cycle_len=self.config['num_steps_train']//self.config['epsilon_num_cycles'],
-                                               num_cycles=self.config['epsilon_num_cycles'])
             self.local_episode += 1
             self.global_episode.value += 1
             self.exp_buffer.clear()
@@ -61,23 +67,21 @@ class Agent(object):
             ep_start_time = time.time()
             state = self.env_wrapper.reset()
             self.ou_noise.reset()
-            epsilon_chance = 0.0
             done = False
             while not done:
+                action = self.actor.get_action(state)
                 if self.agent_type == "exploration":
-                    epsilon_chance = epsilon_func(update_step.value)
-                    rand_n = np.random.random()
-                    if rand_n < epsilon_chance:
-                        action = np.random.random(self.config['action_dims'])
-                    else:
-                        action = self.actor.get_action(state)
-                        action = self.ou_noise.get_action(action, num_steps)
-                        action = action.squeeze(0)
+                    action = self.ou_noise.get_action(action, num_steps)
+                    action = action.squeeze(0)
                 else:
-                    action = self.actor.get_action(state).detach().cpu().numpy().flatten()
-                next_state, (reward_orig, reward), done = self.env_wrapper.step(action)
+                    action = action.detach().cpu().numpy().flatten()
+                next_state, reward, done = self.env_wrapper.step(action)
 
                 episode_reward += reward
+
+                state = self.env_wrapper.normalise_state(state)
+                reward = self.env_wrapper.normalise_reward(reward)
+
                 self.exp_buffer.append((state, action, reward))
 
                 # We need at least N steps in the experience buffer before we can compute Bellman
@@ -89,11 +93,12 @@ class Agent(object):
                     for (_, _, r_i) in self.exp_buffer:
                         discounted_reward += r_i * gamma
                         gamma *= self.config['discount_rate']
-                    try:
-                        discounted_reward = self.env_wrapper.normalize_reward(discounted_reward)
-                        replay_queue.put_nowait([state_0, action_0, discounted_reward, next_state, done, gamma])
-                    except:
-                        pass
+                    # We want to fill buffer only with form explorator
+                    if self.agent_type == "exploration":
+                        try:
+                            replay_queue.put_nowait([state_0, action_0, discounted_reward, next_state, done, gamma])
+                        except:
+                            pass
 
                 state = next_state
 
@@ -106,11 +111,11 @@ class Agent(object):
                         for (_, _, r_i) in self.exp_buffer:
                             discounted_reward += r_i * gamma
                             gamma *= self.config['discount_rate']
-                        try:
-                            discounted_reward = self.env_wrapper.normalize_reward(discounted_reward)
-                            replay_queue.put_nowait([state_0, action_0, discounted_reward, next_state, done, gamma])
-                        except:
-                            pass
+                        if self.agent_type == "exploration":
+                            try:
+                                replay_queue.put_nowait([state_0, action_0, discounted_reward, next_state, done, gamma])
+                            except:
+                               pass
                     break
 
                 num_steps += 1
@@ -119,22 +124,20 @@ class Agent(object):
             step = update_step.value
             self.logger.scalar_summary("agent/reward", episode_reward, step)
             self.logger.scalar_summary("agent/episode_timing", time.time() - ep_start_time, step)
-            self.logger.scalar_summary("agent/epsilon", epsilon_chance, step)
 
             # Saving agent
-            if self.local_episode % self.num_episode_save == 0 or episode_reward > best_reward:
+            reward_outperformed = episode_reward - best_reward > self.config["save_reward_threshold"]
+            time_to_save = self.local_episode % self.num_episode_save == 0
+            if self.n_agent == 0 and (time_to_save or reward_outperformed):
                 if episode_reward > best_reward:
                     best_reward = episode_reward
                 self.save(f"local_episode_{self.local_episode}_reward_{best_reward:4f}")
 
             rewards.append(episode_reward)
-
-        # Save replay from the first agent only
-        if self.n_agent == 0:
-            self.save_replay_gif()
+            if self.agent_type == "exploration" and self.local_episode % self.config['update_agent_ep'] == 0:
+                self.update_actor_learner(learner_w_queue, training_on)
 
         empty_torch_queue(replay_queue)
-
         print(f"Agent {self.n_agent} done.")
 
     def save(self, checkpoint_name):
@@ -144,11 +147,10 @@ class Agent(object):
         model_fn = f"{process_dir}/{checkpoint_name}.pt"
         torch.save(self.actor, model_fn)
 
-    def save_replay_gif(self):
-        if self.config['env'] in ['LearnToMove']:
-            return
+    def save_replay_gif(self, output_dir_name):
+        import matplotlib.pyplot as plt
 
-        dir_name = "replay_render"
+        dir_name = output_dir_name
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
 
