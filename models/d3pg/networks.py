@@ -69,6 +69,7 @@ class PolicyNetwork(nn.Module):
         self.device = device
 
     def get_action(self, state):
+        #print("State in get_action: ", state)
         state = torch.tensor(state).float().unsqueeze(0).to(self.device)
         action = self.forward(state)
         return action
