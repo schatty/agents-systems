@@ -1,6 +1,6 @@
 # Environment parameters
 
-env: Walker-v2
+env: Walker2d-v2
 state_dim: 17
 action_dim: 6
 action_low: -1
