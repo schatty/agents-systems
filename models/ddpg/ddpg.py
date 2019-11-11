@@ -55,7 +55,7 @@ class DDPG(object):
         self.discount = discount
         self.tau = tau
 
-        self.logger = Logger(log_dir)
+        self.logger = Logger(f"{log_dir}/ddpg")
 
     def select_action(self, state):
         state = torch.FloatTensor(state.reshape(1, -1)).to(device)
@@ -96,7 +96,7 @@ class DDPG(object):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
         # Log losses
-        if (step % 5_000) == 0:
+        if ((step+1) % 5_000) == 0:
             self.logger.scalar_summary("ddpg/policy_loss", actor_loss, step)
             self.logger.scalar_summary("ddpg/critic_loss", critic_loss, step)
 

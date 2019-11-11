@@ -1,42 +1,89 @@
 import copy
-import time
+import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
-
-from utils.logger import Logger
-from utils.misc import empty_torch_queue
-from .networks import PolicyNetwork, ValueNetwork
-
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+from utils.logger import Logger
 
-class LearnerTD3(object):
-    def __init__(self, config, local_policy, target_policy, log_dir):
-        self.config = config
-        self.log_dir = log_dir
+# Implementation of Twin Delayed Deep Deterministic Policy Gradients (TD3)
+# Paper: https://arxiv.org/abs/1802.09477
 
-        state_dim = config["state_dims"]
-        action_dim = config["action_dims"]
-        max_action = config["max_action"]
-        dense_size = config["dense_size"]
-        discount = config["discount_rate"]
-        tau = config["tau"]
-        lr_policy = config["actor_learning_rate"]
-        lr_value = config["critic_learning_rate"]
-        policy_noise = config["policy_noise"]
-        noise_clip = config["policy_clip"]
-        policy_freq = config["policy_freq"]
 
-        self.num_train_steps = config["steps_train"]
+class Actor(nn.Module):
+    def __init__(self, state_dim, action_dim, max_action):
+        super(Actor, self).__init__()
 
-        self.actor = local_policy
-        self.actor_target = target_policy
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr_policy)
+        self.l1 = nn.Linear(state_dim, 256)
+        self.l2 = nn.Linear(256, 256)
+        self.l3 = nn.Linear(256, action_dim)
 
-        self.critic = ValueNetwork(state_dim, action_dim, dense_size).to(device)
+        self.max_action = max_action
+
+    def forward(self, state):
+        a = F.relu(self.l1(state))
+        a = F.relu(self.l2(a))
+        return self.max_action * torch.tanh(self.l3(a))
+
+
+class Critic(nn.Module):
+    def __init__(self, state_dim, action_dim):
+        super(Critic, self).__init__()
+
+        # Q1 architecture
+        self.l1 = nn.Linear(state_dim + action_dim, 256)
+        self.l2 = nn.Linear(256, 256)
+        self.l3 = nn.Linear(256, 1)
+
+        # Q2 architecture
+        self.l4 = nn.Linear(state_dim + action_dim, 256)
+        self.l5 = nn.Linear(256, 256)
+        self.l6 = nn.Linear(256, 1)
+
+    def forward(self, state, action):
+        sa = torch.cat([state, action], 1)
+
+        q1 = F.relu(self.l1(sa))
+        q1 = F.relu(self.l2(q1))
+        q1 = self.l3(q1)
+
+        q2 = F.relu(self.l4(sa))
+        q2 = F.relu(self.l5(q2))
+        q2 = self.l6(q2)
+        return q1, q2
+
+    def Q1(self, state, action):
+        sa = torch.cat([state, action], 1)
+
+        q1 = F.relu(self.l1(sa))
+        q1 = F.relu(self.l2(q1))
+        q1 = self.l3(q1)
+        return q1
+
+
+class TD3(object):
+    def __init__(
+            self,
+            state_dim,
+            action_dim,
+            max_action,
+            discount=0.99,
+            tau=0.005,
+            policy_noise=0.2,
+            noise_clip=0.5,
+            policy_freq=2,
+            log_dir=""
+    ):
+
+        self.actor = Actor(state_dim, action_dim, max_action).to(device)
+        self.actor_target = copy.deepcopy(self.actor)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
+
+        self.critic = Critic(state_dim, action_dim).to(device)
         self.critic_target = copy.deepcopy(self.critic)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr_value)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
 
         self.max_action = max_action
         self.discount = discount
@@ -47,39 +94,17 @@ class LearnerTD3(object):
 
         self.total_it = 0
 
-        log_dir = f"{log_dir}/learner"
-        self.logger = Logger(log_dir)
-        # training step to log
-        self.log_every = [1, self.num_train_steps // 1000][self.num_train_steps > 1000]
+        self.logger = Logger(f"{log_dir}/td3")
 
     def select_action(self, state):
         state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         return self.actor(state).cpu().data.numpy().flatten()
 
-    def run(self, training_on, batch_queue, update_step):
-        time_start = time.time()
-        while update_step.value < self.num_train_steps:
-            if batch_queue.empty():
-                continue
-            batch = batch_queue.get()
-
-            self._update_step(batch, update_step)
-            update_step.value += 1
-            if update_step.value % 50 == 0:
-                print("Training step ", update_step.value)
-
-        training_on.value = 0
-
-        duration_secs = time.time() - time_start
-        duration_h = duration_secs // 3600
-        duration_m = duration_secs % 3600 / 60
-        print(f"Exit learner. Training took: {duration_h:} h {duration_m:.3f} min")
-
-    def _update_step(self, batch, update_step):
-        update_time = time.time()
+    def train(self, replay_buffer, step, batch_size):
+        self.total_it += 1
 
         # Sample replay buffer
-        state, action, next_state, reward, not_done = batch
+        state, action, next_state, reward, not_done = replay_buffer.sample(batch_size)
 
         with torch.no_grad():
             # Select action according to policy and add clipped noise
@@ -100,22 +125,22 @@ class LearnerTD3(object):
         current_Q1, current_Q2 = self.critic(state, action)
 
         # Compute critic loss
-        value_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
+        critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
 
         # Optimize the critic
         self.critic_optimizer.zero_grad()
-        value_loss.backward()
+        critic_loss.backward()
         self.critic_optimizer.step()
 
         # Delayed policy updates
         if self.total_it % self.policy_freq == 0:
 
-            # Compute actor loss
-            policy_loss = -self.critic.Q1(state, self.actor(state)).mean()
+            # Compute actor losse
+            self.actor_loss = -self.critic.Q1(state, self.actor(state)).mean()
 
             # Optimize the actor
             self.actor_optimizer.zero_grad()
-            policy_loss.backward()
+            self.actor_loss.backward()
             self.actor_optimizer.step()
 
             # Update the frozen target models
@@ -125,10 +150,18 @@ class LearnerTD3(object):
             for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
-        if update_step.value % self.log_every == 0:
-            step = update_step.value
-            self.logger.scalar_summary("learner/value_loss", value_loss.item(), step)
-            self.logger.scalar_summary("learner/policy_loss", policy_loss.item(), step)
-            self.logger.scalar_summary("learner/learner_update_timing", time.time() - update_time, step)
+        if ((step+1) % 5_000) == 0:
+            self.logger.scalar_summary("td3/policy_loss", self.actor_loss, step)
+            self.logger.scalar_summary("td3/critic_loss", critic_loss, step)
 
-        self.total_it += 1
+    def save(self, filename):
+        torch.save(self.critic.state_dict(), filename + "_critic")
+        torch.save(self.critic_optimizer.state_dict(), filename + "_critic_optimizer")
+        torch.save(self.actor.state_dict(), filename + "_actor")
+        torch.save(self.actor_optimizer.state_dict(), filename + "_actor_optimizer")
+
+    def load(self, filename):
+        self.critic.load_state_dict(torch.load(filename + "_critic"))
+        self.critic_optimizer.load_state_dict(torch.load(filename + "_critic_optimizer"))
+        self.actor.load_state_dict(torch.load(filename + "_actor"))
+        self.actor_optimizer.load_state_dict(torch.load(filename + "_actor_optimizer"))

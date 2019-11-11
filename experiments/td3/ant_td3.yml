@@ -1,15 +1,15 @@
 # Environment parameters
 
-env: Reacher-v2
-state_dim: 11
-action_dim: 2
+env: Ant-v2
+state_dim: 111
+action_dim: 8
 action_low: -1
 action_high: 1
 seed: 2019
 
 # Training parameters
 
-model: ddpg
+model: td3
 batch_size: 256
 num_steps_train: 1_000_000 # number of episodes from all agents
 replay_mem_size: 1_000_000 # maximum capacity of replay memory
@@ -34,6 +34,4 @@ tau: 0.001 # parameter for soft target network updates
 # Miscellaneous
 
 results_path: results
-
-
 

@@ -1,156 +1,159 @@
 from datetime import datetime
-from multiprocessing import set_start_method
-import torch.multiprocessing as torch_mp
-import multiprocessing as mp
-try:
-    set_start_method('spawn')
-except RuntimeError:
-    pass
+import time
+import numpy as np
+import torch
+import gym
 import os
-from shutil import copyfile
 
-from .td3 import LearnerTD3
-from .agent import Agent
-from .networks import PolicyNetwork
-from utils.misc import read_config, empty_torch_queue
 from utils.logger import Logger
 from .utils import ReplayBuffer
+from .td3 import TD3
 
 
-def sampler_worker(config, replay_queue, batch_queue, training_on,
-                   global_episode, update_step, log_dir=''):
-    """
-    Function that transfers replay to the buffer and batches from buffer to the queue.
-    Args:
-        config:
-        replay_queue:
-        batch_queue:
-        training_on:
-        global_episode:
-        log_dir:
-    """
-    batch_size = config['batch_size']
-    num_steps_train = config['steps_train']
-    log_every = [1, num_steps_train // 1000][num_steps_train > 1000]
+# Runs policy for X episodes and returns average reward
+# A fixed seed is used for the eval environment
+def eval_policy(policy, env_name, seed, eval_episodes=10):
+    eval_env = gym.make(env_name)
+    eval_env.seed(seed + 100)
 
-    # Logger
-    log_dir = f"{log_dir}/data_struct"
-    logger = Logger(log_dir=log_dir)
+    avg_reward = 0.
+    for _ in range(eval_episodes):
+        state, done = eval_env.reset(), False
+        while not done:
+            action = policy.select_action(np.array(state))
+            state, reward, done, _ = eval_env.step(action)
+            avg_reward += reward
 
-    # Create replay buffer
-    replay_buffer = ReplayBuffer(state_dim=config["state_dims"], action_dim=config["action_dims"])
+    avg_reward /= eval_episodes
 
-    while training_on.value or not replay_queue.empty():
-        # (1) Transfer replays to global buffer
-        n = replay_queue.qsize()
-        for _ in range(n):
-            replay = replay_queue.get()
-            replay_buffer.add(*replay)
-
-        # (2) Transfer batch of replay from buffer to the batch_queue
-        if not training_on.value:
-            # Repeat loop to wait until replay_queue will be empty
-            continue
-        if len(replay_buffer) < batch_size:
-            continue
-
-        if not batch_queue.full():
-            batch = replay_buffer.sample(batch_size)
-            batch_queue.put(batch)
-
-        if update_step.value % 1000 == 0:
-            print("Step: ", update_step.value, " buffer: ", len(replay_buffer))
-
-        # Log data structures sizes
-        if update_step.value % log_every == 0:
-            step = global_episode.value
-            logger.scalar_summary("data_struct/replay_queue", replay_queue.qsize(), step)
-            logger.scalar_summary("data_struct/batch_queue", batch_queue.qsize(), step)
-            logger.scalar_summary("data_struct/replay_buffer", len(replay_buffer), step)
-
-    empty_torch_queue(batch_queue)
-    print("Replay buffer final size: ", len(replay_buffer))
-    print("Stop sampler worker.")
+    print("---------------------------------------")
+    print(f"Evaluation over {eval_episodes} episodes: {avg_reward:.3f}")
+    print("---------------------------------------")
+    return avg_reward
 
 
-def agent_worker(config, policy_network, global_episode, n_agent, log_dir, training_on, replay_queue, update_step, agent_type):
-    agent = Agent(config,
-                  policy_network,
-                  global_episode=global_episode,
-                  n_agent=n_agent,
-                  log_dir=log_dir,
-                  agent_type=agent_type)
-    agent.run(training_on, replay_queue, update_step)
+class Engine(object):
+    def __init__(self, config):
+        self.config = config
 
+    def train(self):
+        config = self.config
+        env_name = config["env"]
+        seed = config["seed"]
+        save_dir = config["results_path"]
 
-def learner_worker(config, local_policy, target_policy, log_dir, training_on, batch_queue, update_step):
-    learner = LearnerTD3(config, local_policy, target_policy, log_dir=log_dir)
-    learner.run(training_on, batch_queue, update_step)
+        state_dim = config["state_dim"]
+        action_dim = config["action_dim"]
+        min_action = config["action_low"]
+        max_action = config["action_high"]
+        tau = config["tau"]
+        discount = config["discount_rate"]
+        load_model = config["load_model"]
+        max_timesteps = config["num_steps_train"]
+        start_timesteps = config["start_timesteps"]
+        batch_size = config["batch_size"]
+        eval_freq = config["eval_freq"]
+        expl_noise = config["expl_noise"]
+        policy_freq = config["policy_freq"]
+        noise_clip = config["noise_clip"]
+        policy_noise = config["policy_noise"]
 
+        start_time = time.time()
+        print("---------------------------------------")
+        print(f"Policy: ddpg, Env: {env_name}, Seed: {seed}")
+        print("---------------------------------------")
 
-class ExperimentEngine(object):
-    def __init__(self, config_path):
-        self.config = read_config(config_path)
+        if not os.path.exists("./results"):
+            os.makedirs("./results")
+
+        if not os.path.exists("./models"):
+            os.makedirs("./models")
 
         # Create directory for experiment
-        self.experiment_dir = f"{self.config['results_path']}/{self.config['env']}-{self.config['model']}-{datetime.now():%Y-%m-%d_%H:%M:%S}"
-        if not os.path.exists(self.experiment_dir):
-            os.makedirs(self.experiment_dir)
-        if config_path is not None:
-            copyfile(config_path, f"{self.experiment_dir}/config.yml")
+        experiment_dir = f"{config['results_path']}/{config['env']}-{config['model']}-{datetime.now():%Y-%m-%d_%H:%M:%S}"
+        if not os.path.exists(experiment_dir):
+            os.makedirs(f"{experiment_dir}/models")
 
-    def run(self):
-        config = self.config
+        logger = Logger(f"{experiment_dir}/agent")
+        env = gym.make(env_name)
 
-        replay_queue_size = config['replay_queue_size']
-        batch_queue_size = config['batch_queue_size']
-        n_agents = config['num_agents']
-        n_exploiters = config['num_exploiters']
+        # Set seeds
+        env.seed(seed)
+        torch.manual_seed(seed)
+        np.random.seed(seed)
 
-        # Data structures
-        processes = []
-        replay_queue = mp.Queue(maxsize=replay_queue_size)
-        batch_queue = mp.Queue(maxsize=batch_queue_size)
-        training_on = torch_mp.Value('i', 1)
-        update_step = torch_mp.Value('i', 0)
-        global_episode = torch_mp.Value('i', 0)
+        kwargs = {
+            "state_dim": state_dim,
+            "action_dim": action_dim,
+            "max_action": max_action,
+            "discount": discount,
+            "tau": tau,
+            "policy_noise": policy_noise * max_action,
+            "noise_clip": noise_clip * max_action,
+            "policy_freq": policy_freq,
+            "log_dir": experiment_dir
+        }
 
-        # Data sampler
-        p = torch_mp.Process(target=sampler_worker,
-                             args=(config, replay_queue, batch_queue, training_on,
-                                   global_episode, update_step, self.experiment_dir))
-        processes.append(p)
+        # Initialize policy
+        policy = TD3(**kwargs)
 
-        # Learner (neural net training process)
-        local_policy = PolicyNetwork(config["state_dims"], config["action_dims"], config["max_action"], config["dense_size"])
-        local_policy.share_memory()
-        local_policy.to(config["device"])
+        if load_model is not None:
+            policy.load(load_model)
 
-        target_policy = PolicyNetwork(config["state_dims"], config["action_dims"], config["max_action"], config["dense_size"])
-        target_policy.share_memory()
-        target_policy.to(config["device"])
+        replay_buffer = ReplayBuffer(state_dim, action_dim)
 
-        p = torch_mp.Process(target=learner_worker,
-                             args=(config, local_policy, target_policy, self.experiment_dir, training_on, batch_queue, update_step))
-        processes.append(p)
+        state, done = env.reset(), False
+        episode_reward = 0
+        episode_timesteps = 0
+        episode_num = 0
 
-        # Agents (exploitation processes)
-        for i in range(n_exploiters):
-            p = torch_mp.Process(target=agent_worker,
-                                 args=(self.config, target_policy, global_episode, i,
-                                       self.experiment_dir, training_on, replay_queue, update_step, "exploitation"))
-            processes.append(p)
+        for t in range(max_timesteps):
 
-        # Agents (exploration processes)
-        for i in range(n_exploiters, n_exploiters+n_agents):
-            p = torch_mp.Process(target=agent_worker,
-                                 args=(self.config, local_policy, global_episode, i,
-                                       self.experiment_dir, training_on, replay_queue, update_step, "exploration"))
-            processes.append(p)
+            episode_timesteps += 1
 
-        for p in processes:
-            p.start()
-        for p in processes:
-            p.join()
+            # Select action randomly or according to policy
 
-        print("End.")
+            if t < start_timesteps:
+                action = env.action_space.sample()
+            else:
+                action = (
+                        policy.select_action(np.array(state))
+                        + np.random.normal(0, max_action * expl_noise, size=action_dim)
+                ).clip(-max_action, max_action)
+
+            # Perform action
+            next_state, reward, done, _ = env.step(action)
+            done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
+
+            # Store data in replay buffer
+            replay_buffer.add(state, action, next_state, reward, done_bool)
+
+            state = next_state
+            episode_reward += reward
+
+            # Train agent after collecting sufficient data
+            if t >= start_timesteps:
+                policy.train(replay_buffer, step=t, batch_size=batch_size)
+
+            if done:
+                # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
+                print(
+                    f"Total T: {t + 1} Episode Num: {episode_num + 1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
+                # Reset environment
+                state, done = env.reset(), False
+                episode_reward = 0
+                episode_timesteps = 0
+                episode_num += 1
+
+            # Evaluate episode
+            if (t + 1) % eval_freq == 0:
+                reward = eval_policy(policy, env_name, seed)
+                # Save reward
+                logger.scalar_summary("agent/eval_reward", reward, t)
+                # Save model
+                policy.save(f"{experiment_dir}/models/policy_{t}")
+
+        total_time = time.time() - start_time
+        hh = total_time // 3600
+        mm = (total_time % 3600) / 60
+        print(f"Evaluation time: {hh} hours {mm:.3} minutes.")

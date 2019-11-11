@@ -3,27 +3,25 @@
 env: Ant-v2
 state_dim: 111
 action_dim: 8
-action_low: -2
-action_high: 2
-num_agents: 2
-random_seed: 2019
+action_low: -1
+action_high: 1
+seed: 2019
 
 # Training parameters
 
 model: ddpg
 batch_size: 256
-num_steps_train: 100_000 # number of episodes from all agents
-max_ep_length: 400 # maximum number of steps per episode
+num_steps_train: 1_000_000 # number of episodes from all agents
 replay_mem_size: 1_000_000 # maximum capacity of replay memory
 discount_rate: 0.99 # Discount rate (gamma) for future rewards
-n_step_returns: 1 # number of future steps to collect experiences for N-step returns
-update_agent_ep: 1 # agent gets latest parameters from learner every update_agent_ep episodes
-replay_queue_size: 64 # queue with replays from all the agents
-batch_queue_size: 64 # queue with batches given to learner
-num_episode_save: 100
 device: cuda
-agent_device: cpu
-save_reward_threshold: 1 # difference in best reward to save agent model
+load_model:
+start_timesteps: 10_000 # Time steps initial random policy is used
+eval_freq: 5_000 # How often (time steps) we evaluate
+expl_noise: 0.1 # Std of Gaussian exploration noise
+policy_noise: 0.2 # Noise added to target policy during critic update
+noise_clip: 0.5 # Range to clip target policy noise
+policy_freq: 2 # Frequency of delayed policy updates
 
 # Network parameters
 
@@ -36,4 +34,5 @@ tau: 0.001 # parameter for soft target network updates
 # Miscellaneous
 
 results_path: results
+
 

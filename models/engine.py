@@ -1,6 +1,7 @@
 from .ddpg.engine import Engine as DDPGEngine
 from .d3pg.engine import Engine as D3PGEngine
 from .d4pg.engine import Engine as D4PGEngine
+from .td3.engine import Engine as TD3Engine
 
 
 def load_engine(config):
@@ -11,3 +12,5 @@ def load_engine(config):
         return D3PGEngine(config)
     if config["model"] == "d4pg":
         return D4PGEngine(config)
+    if config["model"] == "td3":
+        return TD3Engine(config)

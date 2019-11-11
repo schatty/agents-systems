@@ -2,9 +2,7 @@
 
 env: Ant-v2
 state_dim: 111
-action_dim: 8
-action_low: -2
-action_high: 2
+action_high: 1
 num_agents: 4
 random_seed: 2019
 
