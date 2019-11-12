@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 from utils.logger import Logger
 
 # Implementation of Twin Delayed Deep Deterministic Policy Gradients (TD3)
@@ -40,6 +41,16 @@ class Critic(nn.Module):
         self.l5 = nn.Linear(256, 256)
         self.l6 = nn.Linear(256, 1)
 
+        # Q3 architecture
+        self.l7 = nn.Linear(state_dim + action_dim, 256)
+        self.l8 = nn.Linear(256, 256)
+        self.l9 = nn.Linear(256, 1)
+
+        # Q4 architecture
+        self.l10 = nn.Linear(state_dim + action_dim, 256)
+        self.l11 = nn.Linear(256, 256)
+        self.l12 = nn.Linear(256, 1)
+
     def forward(self, state, action):
         sa = torch.cat([state, action], 1)
 
@@ -50,7 +61,16 @@ class Critic(nn.Module):
         q2 = F.relu(self.l4(sa))
         q2 = F.relu(self.l5(q2))
         q2 = self.l6(q2)
-        return q1, q2
+
+        q3 = F.relu(self.l7(sa))
+        q3 = F.relu(self.l8(q3))
+        q3 = self.l9(q3)
+
+        q4 = F.relu(self.l10(sa))
+        q4 = F.relu(self.l11(q4))
+        q4 = self.l12(q4)
+
+        return q1, q2, q3, q4
 
     def Q1(self, state, action):
         sa = torch.cat([state, action], 1)
@@ -117,17 +137,23 @@ class TD3(object):
             ).clamp(-self.max_action, self.max_action)
 
             # Compute the target Q value
-            target_Q1, target_Q2 = self.critic_target(next_state, next_action)
+            target_Q1, target_Q2, target_Q3, target_Q4 = self.critic_target(next_state, next_action)
+
             target_Q = torch.min(target_Q1, target_Q2)
+            target_Q = torch.min(target_Q, target_Q3)
+            target_Q = torch.min(target_Q, target_Q4)
+
             target_Q = reward + not_done * self.discount * target_Q
 
         # Get current Q estimates
-        current_Q1, current_Q2 = self.critic(state, action)
+        current_Q1, current_Q2, current_Q3, current_Q4 = self.critic(state, action)
         q1_loss = F.mse_loss(current_Q1, target_Q)
         q2_loss = F.mse_loss(current_Q2, target_Q)
+        q3_loss = F.mse_loss(current_Q3, target_Q)
+        q4_loss = F.mse_loss(current_Q4, target_Q)
 
         # Compute critic loss
-        critic_loss = q1_loss + q2_loss
+        critic_loss = q1_loss + q2_loss + q3_loss + q4_loss
 
         # Optimize the critic
         self.critic_optimizer.zero_grad()
@@ -155,6 +181,8 @@ class TD3(object):
         if ((step+1) % 1_000) == 0:
             self.logger.scalar_summary("td3/Q1", q1_loss.item(), step)
             self.logger.scalar_summary("td3/Q2", q2_loss.item(), step)
+            self.logger.scalar_summary("td3/Q3", q3_loss.item(), step)
+            self.logger.scalar_summary("td3/Q4", q4_loss.item(), step)
             self.logger.scalar_summary("td3/policy_loss", self.actor_loss, step)
             self.logger.scalar_summary("td3/critic_loss", critic_loss, step)
 
