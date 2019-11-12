@@ -1,10 +1,8 @@
 import copy
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 from utils.logger import Logger
 
@@ -74,7 +72,8 @@ class TD3(object):
             policy_noise=0.2,
             noise_clip=0.5,
             policy_freq=2,
-            log_dir=""
+            log_dir="",
+            device="cuda"
     ):
 
         self.actor = Actor(state_dim, action_dim, max_action).to(device)
@@ -94,10 +93,11 @@ class TD3(object):
 
         self.total_it = 0
 
+        self.device = device
         self.logger = Logger(f"{log_dir}/td3")
 
     def select_action(self, state):
-        state = torch.FloatTensor(state.reshape(1, -1)).to(device)
+        state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
         return self.actor(state).cpu().data.numpy().flatten()
 
     def train(self, replay_buffer, step, batch_size):

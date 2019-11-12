@@ -3,9 +3,11 @@ import copy
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from collections import deque
 import time
 import queue
 
+from env.utils import create_env_wrapper
 from utils.misc import OUNoise, empty_torch_queue
 from utils.logger import Logger
 from .networks import ValueNetwork
@@ -35,6 +37,7 @@ class LearnerD3PG(object):
         self.log_dir = log_dir
         self.logger = Logger(f"{log_dir}/learner")
         self.learner_w_queue = learner_w_queue
+        self.eval_freq = config['eval_freq']
 
         # Noise process
         self.ou_noise = OUNoise(dim=config["action_dim"], low=config["action_low"], high=config["action_high"])
@@ -119,6 +122,11 @@ class LearnerD3PG(object):
                 continue
             self._update_step(batch, update_step)
 
+            # Evaluate episode
+            if (update_step.value + 1) % self.eval_freq == 0:
+                reward = self.eval_policy()
+                self.logger.scalar_summary("learner/eval_reward", reward, update_step.value)
+
             update_step.value += 1
             if update_step.value % 1000 == 0:
                 print("Training step ", update_step.value)
@@ -126,3 +134,49 @@ class LearnerD3PG(object):
         training_on.value = 0
         empty_torch_queue(self.learner_w_queue)
         print("Exit learner.")
+
+    def eval_policy(self, eval_episodes=10):
+        env_wrapper = create_env_wrapper(self.config)
+        exp_buffer = deque()
+        avg_reward = 0
+        for _ in range(eval_episodes):
+            state = env_wrapper.reset()
+            done = False
+            while not done:
+                action = self.target_policy_net.get_action(state).detach().cpu().numpy().flatten()
+                next_state, reward, done = env_wrapper.step(action)
+
+                avg_reward += reward
+
+                state = env_wrapper.normalise_state(state)
+                reward = env_wrapper.normalise_reward(reward)
+                exp_buffer.append((state, action, reward))
+
+                # We need at least N steps in the experience buffer before we can compute Bellman
+                # rewards and add an N-step experience to replay memory
+                if len(exp_buffer) >= self.config['n_step_returns']:
+                    state_0, action_0, reward_0 = exp_buffer.popleft()
+                    discounted_reward = reward_0
+                    gamma = self.config['discount_rate']
+                    for (_, _, r_i) in exp_buffer:
+                        discounted_reward += r_i * gamma
+                        gamma *= self.config['discount_rate']
+
+                state = next_state
+
+                if done:
+                    # add rest of experiences remaining in buffer
+                    while len(exp_buffer) != 0:
+                        state_0, action_0, reward_0 = exp_buffer.popleft()
+                        discounted_reward = reward_0
+                        gamma = self.config['discount_rate']
+                        for (_, _, r_i) in exp_buffer:
+                            discounted_reward += r_i * gamma
+                            gamma *= self.config['discount_rate']
+                    break
+
+        avg_reward /= eval_episodes
+        print("---------------------------------------")
+        print(f"Evaluation over {eval_episodes} episodes: {avg_reward:.3f}")
+        print("---------------------------------------")
+        return avg_reward

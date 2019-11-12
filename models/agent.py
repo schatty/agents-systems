@@ -11,11 +11,10 @@ from env.utils import create_env_wrapper
 
 class Agent(object):
 
-    def __init__(self, config, policy, global_episode, n_agent=0, agent_type='exploration', log_dir=''):
+    def __init__(self, config, policy, global_episode, n_agent=0, log_dir=''):
         print(f"Initializing agent {n_agent}...")
         self.config = config
         self.n_agent = n_agent
-        self.agent_type = agent_type
         self.max_steps = config['max_ep_length']
         self.num_episode_save = config['num_episode_save']
         self.global_episode = global_episode
@@ -51,8 +50,6 @@ class Agent(object):
     def run(self, training_on, replay_queue, learner_w_queue, update_step):
         # Initialise deque buffer to store experiences for N-step returns
         self.exp_buffer = deque()
-
-        best_reward = -float("inf")
         rewards = []
         while training_on.value:
             episode_reward = 0
@@ -70,11 +67,9 @@ class Agent(object):
             done = False
             while not done:
                 action = self.actor.get_action(state)
-                if self.agent_type == "exploration":
-                    action = self.ou_noise.get_action(action, num_steps)
-                    action = action.squeeze(0)
-                else:
-                    action = action.detach().cpu().numpy().flatten()
+                action = self.ou_noise.get_action(action, num_steps)
+                action = action.squeeze(0)
+
                 next_state, reward, done = self.env_wrapper.step(action)
 
                 episode_reward += reward
@@ -93,12 +88,10 @@ class Agent(object):
                     for (_, _, r_i) in self.exp_buffer:
                         discounted_reward += r_i * gamma
                         gamma *= self.config['discount_rate']
-                    # We want to fill buffer only with form explorator
-                    if self.agent_type == "exploration":
-                        try:
-                            replay_queue.put_nowait([state_0, action_0, discounted_reward, next_state, done, gamma])
-                        except:
-                            pass
+                    try:
+                        replay_queue.put_nowait([state_0, action_0, discounted_reward, next_state, done, gamma])
+                    except:
+                        pass
 
                 state = next_state
 
@@ -111,30 +104,22 @@ class Agent(object):
                         for (_, _, r_i) in self.exp_buffer:
                             discounted_reward += r_i * gamma
                             gamma *= self.config['discount_rate']
-                        if self.agent_type == "exploration":
-                            try:
-                                replay_queue.put_nowait([state_0, action_0, discounted_reward, next_state, done, gamma])
-                            except:
-                               pass
+                        try:
+                            replay_queue.put_nowait([state_0, action_0, discounted_reward, next_state, done, gamma])
+                        except:
+                            pass
                     break
 
                 num_steps += 1
 
             # Log metrics
             step = update_step.value
-            self.logger.scalar_summary("agent/reward", episode_reward, step)
-            self.logger.scalar_summary("agent/episode_timing", time.time() - ep_start_time, step)
-
-            # Saving agent
-            reward_outperformed = episode_reward - best_reward > self.config["save_reward_threshold"]
-            time_to_save = self.local_episode % self.num_episode_save == 0
-            if self.n_agent == 0 and (time_to_save or reward_outperformed):
-                if episode_reward > best_reward:
-                    best_reward = episode_reward
-                self.save(f"local_episode_{self.local_episode}_reward_{best_reward:4f}")
+            if (step+1 % self.config['eval_freq']) == 0:
+                self.logger.scalar_summary("agent/reward", episode_reward, step)
+                self.logger.scalar_summary("agent/episode_timing", time.time() - ep_start_time, step)
 
             rewards.append(episode_reward)
-            if self.agent_type == "exploration" and self.local_episode % self.config['update_agent_ep'] == 0:
+            if self.local_episode % self.config['update_agent_ep'] == 0:
                 self.update_actor_learner(learner_w_queue, training_on)
 
         empty_torch_queue(replay_queue)

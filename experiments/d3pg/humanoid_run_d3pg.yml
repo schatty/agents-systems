@@ -24,6 +24,7 @@ num_episode_save: 100
 device: cuda
 agent_device: cpu
 save_reward_threshold: 1 # difference in best reward to save agent model
+eval_freq: 5_000 # How often (time steps) we evaluate
 
 # Network parameters
 

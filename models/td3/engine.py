@@ -57,6 +57,7 @@ class Engine(object):
         policy_freq = config["policy_freq"]
         noise_clip = config["noise_clip"]
         policy_noise = config["policy_noise"]
+        device = config["device"]
 
         start_time = time.time()
         print("---------------------------------------")
@@ -91,7 +92,8 @@ class Engine(object):
             "policy_noise": policy_noise * max_action,
             "noise_clip": noise_clip * max_action,
             "policy_freq": policy_freq,
-            "log_dir": experiment_dir
+            "log_dir": experiment_dir,
+            "device": device
         }
 
         # Initialize policy
