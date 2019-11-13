@@ -65,10 +65,11 @@ def sampler_worker(config, replay_queue, batch_queue, replay_priorities_queue, t
 
         # Log data structures sizes
         step = update_step.value
-        logger.scalar_summary("data_stuct/global_episode", global_episode.value, step)
-        logger.scalar_summary("data_struct/replay_queue", replay_queue.qsize(), step)
-        logger.scalar_summary("data_struct/batch_queue", batch_queue.qsize(), step)
-        logger.scalar_summary("data_struct/replay_buffer", len(replay_buffer), step)
+        if (step + 1) % config["eval_freq"] == 0:
+            logger.scalar_summary("data_stuct/global_episode", global_episode.value, step)
+            logger.scalar_summary("data_struct/replay_queue", replay_queue.qsize(), step)
+            logger.scalar_summary("data_struct/batch_queue", batch_queue.qsize(), step)
+            logger.scalar_summary("data_struct/replay_buffer", len(replay_buffer), step)
 
     if config['save_buffer_on_disk']:
         replay_buffer.dump(config["results_path"])
@@ -83,13 +84,12 @@ def learner_worker(config, training_on, policy, target_policy_net, learner_w_que
     learner.run(training_on, batch_queue, replay_priority_queue, update_step)
 
 
-def agent_worker(config, policy, learner_w_queue, global_episode, i, agent_type,
+def agent_worker(config, policy, learner_w_queue, global_episode, i,
                  experiment_dir, training_on, replay_queue, update_step):
     agent = Agent(config,
                   policy=policy,
                   global_episode=global_episode,
                   n_agent=i,
-                  agent_type=agent_type,
                   log_dir=experiment_dir)
     agent.run(training_on, replay_queue, learner_w_queue, update_step)
 
@@ -137,16 +137,10 @@ class Engine(object):
                                                           replay_priorities_queue, batch_queue, update_step, experiment_dir))
         processes.append(p)
 
-        # Single agent for exploitation
-        p = torch_mp.Process(target=agent_worker,
-                             args=(config, target_policy_net, None, global_episode, 0, "exploitation", experiment_dir,
-                                   training_on, replay_queue, update_step))
-        processes.append(p)
-
-        # Agents (exploration processes)
-        for i in range(1, n_agents):
+        # Agents
+        for i in range(n_agents):
             p = torch_mp.Process(target=agent_worker,
-                                 args=(config, policy_net_cpu, learner_w_queue, global_episode, i, "exploration", experiment_dir,
+                                 args=(config, policy_net_cpu, learner_w_queue, global_episode, i, experiment_dir,
                                        training_on, replay_queue, update_step))
             processes.append(p)
 

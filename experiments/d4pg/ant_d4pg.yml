@@ -5,14 +5,14 @@ state_dim: 111
 action_dim: 8
 action_low: -1
 action_high: 1
-num_agents: 4
+num_agents: 3
 random_seed: 2019
 
 # Training parameters
 
 model: d4pg
 batch_size: 256
-num_steps_train: 100_000 # number of episodes from all agents
+num_steps_train: 1_000_000 # number of episodes from all agents
 max_ep_length: 1000 # maximum number of steps per episode
 replay_mem_size: 1000000 # maximum capacity of replay memory
 priority_alpha: 0.6 # controls the randomness vs prioritisation of the prioritised sampling (0.0 = Uniform sampling, 1.0 = Greedy prioritisation)
@@ -29,6 +29,7 @@ device: cuda
 agent_device: cpu
 save_buffer_on_disk: 0
 save_reward_threshold: 1 # difference in best reward to save agent model
+eval_freq: 5000 # How often (time steps) we evaluate
 
 
 # Network parameters
@@ -39,7 +40,7 @@ dense_size: 400 # size of the 2 hidden layers in networks
 final_layer_init: 0.003
 num_atoms: 51 # number of atoms in output layer of distributed critic
 v_min: 0 # lower bound of critic value output distribution
-v_max: 4000 # upper bound of critic value output distribution
+v_max: 1000 # upper bound of critic value output distribution
 tau: 0.001 # parameter for soft target network updates
 
 # Miscellaneous

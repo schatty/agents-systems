@@ -62,7 +62,7 @@ def sampler_worker(config, replay_queue, batch_queue, training_on,
             print("Step: ", update_step.value, " buffer: ", len(replay_buffer))
 
         # Log data structures sizes
-        if update_step.value % log_every == 0:
+        if (update_step.value+1) % config["eval_freq"] == 0:
             step = global_episode.value
             logger.scalar_summary("data_struct/replay_queue", replay_queue.qsize(), step)
             logger.scalar_summary("data_struct/batch_queue", batch_queue.qsize(), step)

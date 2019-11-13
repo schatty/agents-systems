@@ -4,12 +4,14 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import queue
+from collections import deque
 
 from utils.misc import OUNoise, empty_torch_queue
 from utils.logger import Logger
 
 from .networks import ValueNetwork
 from .l2_projection import _l2_project
+from env.utils import create_env_wrapper
 
 
 class LearnerD4PG(object):
@@ -21,6 +23,7 @@ class LearnerD4PG(object):
         action_dim = config['action_dim']
         value_lr = config['critic_learning_rate']
         policy_lr = config['actor_learning_rate']
+        self.config = config
         self.v_min = config['v_min']
         self.v_max = config['v_max']
         self.num_atoms = config['num_atoms']
@@ -34,6 +37,7 @@ class LearnerD4PG(object):
         self.prioritized_replay = config['replay_memory_prioritized']
         self.learner_w_queue = learner_w_queue
         self.delta_z = (self.v_max - self.v_min) / (self.num_atoms - 1)
+        self.eval_freq = config["eval_freq"]
 
         self.logger = Logger(f"{log_dir}/learner")
 
@@ -137,7 +141,7 @@ class LearnerD4PG(object):
             )
 
         # Send updated learner to the queue
-        if update_step.value % 100 == 0:
+        if not self.learner_w_queue.full():
             try:
                 params = [p.data.cpu().detach().numpy() for p in self.policy_net.parameters()]
                 self.learner_w_queue.put(params)
@@ -146,9 +150,12 @@ class LearnerD4PG(object):
 
         # Logging
         step = update_step.value
-        self.logger.scalar_summary("learner/policy_loss", policy_loss.item(), step)
-        self.logger.scalar_summary("learner/value_loss", value_loss.item(), step)
-        self.logger.scalar_summary("learner/learner_update_timing", time.time() - update_time, step)
+        if (step + 1) % self.eval_freq == 0:
+            self.logger.scalar_summary("learner/learner_update_timing", time.time() - update_time, step)
+            reward = self.eval_policy()
+            self.logger.scalar_summary("learner/eval_reward", reward, update_step.value)
+            self.logger.scalar_summary("learner/policy_loss", policy_loss.item(), step)
+            self.logger.scalar_summary("learner/value_loss", value_loss.item(), step)
 
     def run(self, training_on, batch_queue, replay_priority_queue, update_step):
         while update_step.value < self.num_train_steps:
@@ -168,3 +175,49 @@ class LearnerD4PG(object):
         empty_torch_queue(self.learner_w_queue)
         empty_torch_queue(replay_priority_queue)
         print("Exit learner.")
+
+    def eval_policy(self, eval_episodes=10):
+        env_wrapper = create_env_wrapper(self.config)
+        exp_buffer = deque()
+        avg_reward = 0
+        for _ in range(eval_episodes):
+            state = env_wrapper.reset()
+            done = False
+            while not done:
+                action = self.target_policy_net.get_action(state).detach().cpu().numpy().flatten()
+                next_state, reward, done = env_wrapper.step(action)
+
+                avg_reward += reward
+
+                state = env_wrapper.normalise_state(state)
+                reward = env_wrapper.normalise_reward(reward)
+                exp_buffer.append((state, action, reward))
+
+                # We need at least N steps in the experience buffer before we can compute Bellman
+                # rewards and add an N-step experience to replay memory
+                if len(exp_buffer) >= self.config['n_step_returns']:
+                    state_0, action_0, reward_0 = exp_buffer.popleft()
+                    discounted_reward = reward_0
+                    gamma = self.config['discount_rate']
+                    for (_, _, r_i) in exp_buffer:
+                        discounted_reward += r_i * gamma
+                        gamma *= self.config['discount_rate']
+
+                state = next_state
+
+                if done:
+                    # add rest of experiences remaining in buffer
+                    while len(exp_buffer) != 0:
+                        state_0, action_0, reward_0 = exp_buffer.popleft()
+                        discounted_reward = reward_0
+                        gamma = self.config['discount_rate']
+                        for (_, _, r_i) in exp_buffer:
+                            discounted_reward += r_i * gamma
+                            gamma *= self.config['discount_rate']
+                    break
+
+        avg_reward /= eval_episodes
+        print("---------------------------------------")
+        print(f"Evaluation over {eval_episodes} episodes: {avg_reward:.3f}")
+        print("---------------------------------------")
+        return avg_reward

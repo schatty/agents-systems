@@ -5,14 +5,14 @@ state_dim: 111
 action_dim: 8
 action_high: 1
 action_low: -1
-num_agents: 4
+num_agents: 3
 random_seed: 2019
 
 # Training parameters
 
 model: d3pg
 batch_size: 256
-num_steps_train: 100_000 # number of episodes from all agents
+num_steps_train: 1_000_000 # number of episodes from all agents
 max_ep_length: 400 # maximum number of steps per episode
 replay_mem_size: 1_000_000 # maximum capacity of replay memory
 discount_rate: 0.99 # Discount rate (gamma) for future rewards
@@ -24,7 +24,7 @@ num_episode_save: 100
 device: cuda:1
 agent_device: cpu
 save_reward_threshold: 1 # difference in best reward to save agent model
-eval_freq: 2500 # How often (time steps) we evaluate
+eval_freq: 5000 # How often (time steps) we evaluate
 
 # Network parameters
 

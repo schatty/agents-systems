@@ -101,7 +101,7 @@ class LearnerD3PG(object):
             )
 
         # Send updated learner to the queue
-        if update_step.value % 100 == 0:
+        if not self.learner_w_queue.full():
             try:
                 params = [p.data.to(self.config["agent_device"]).detach().numpy() for p in self.policy_net.parameters()]
                 self.learner_w_queue.put_nowait(params)
@@ -110,9 +110,12 @@ class LearnerD3PG(object):
 
         # Logging
         step = update_step.value
-        self.logger.scalar_summary("learner/policy_loss", policy_loss.item(), step)
-        self.logger.scalar_summary("learner/value_loss", value_loss.item(), step)
-        self.logger.scalar_summary("learner/update_time", time.time() - update_time, step)
+        if (step+1) % self.config["eval_freq"] == 0:
+            self.logger.scalar_summary("learner/update_time", time.time() - update_time, step)
+            reward = self.eval_policy()
+            self.logger.scalar_summary("learner/eval_reward", reward, update_step.value)
+            self.logger.scalar_summary("learner/policy_loss", policy_loss.item(), step)
+            self.logger.scalar_summary("learner/value_loss", value_loss.item(), step)
 
     def run(self, training_on, batch_queue, update_step):
         while update_step.value < self.num_train_steps:
@@ -121,11 +124,6 @@ class LearnerD3PG(object):
             except queue.Empty:
                 continue
             self._update_step(batch, update_step)
-
-            # Evaluate episode
-            if (update_step.value + 1) % self.eval_freq == 0:
-                reward = self.eval_policy()
-                self.logger.scalar_summary("learner/eval_reward", reward, update_step.value)
 
             update_step.value += 1
             if update_step.value % 1000 == 0:
