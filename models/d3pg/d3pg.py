@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import copy
 import torch
@@ -112,12 +113,15 @@ class LearnerD3PG(object):
         step = update_step.value
         if (step+1) % self.config["eval_freq"] == 0:
             self.logger.scalar_summary("learner/update_time", time.time() - update_time, step)
+            eval_time = time.time()
             reward = self.eval_policy()
+            self.logger.scalar_summary("learner/eval_time", time.time() - eval_time, step)
             self.logger.scalar_summary("learner/eval_reward", reward, update_step.value)
             self.logger.scalar_summary("learner/policy_loss", policy_loss.item(), step)
             self.logger.scalar_summary("learner/value_loss", value_loss.item(), step)
 
     def run(self, training_on, batch_queue, update_step):
+        time_start = time.time()
         while update_step.value < self.num_train_steps:
             try:
                 batch = batch_queue.get_nowait()
@@ -132,6 +136,10 @@ class LearnerD3PG(object):
         training_on.value = 0
         empty_torch_queue(self.learner_w_queue)
         print("Exit learner.")
+        time_elapsed = time.time() - time_start
+        hh = time_elapsed // 3600
+        mm = (time_elapsed % 3600) / 60
+        print(f"Training took {hh} hours {mm:.3} minutes")
 
     def eval_policy(self, eval_episodes=10):
         env_wrapper = create_env_wrapper(self.config)

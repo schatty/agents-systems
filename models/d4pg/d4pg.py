@@ -158,6 +158,7 @@ class LearnerD4PG(object):
             self.logger.scalar_summary("learner/value_loss", value_loss.item(), step)
 
     def run(self, training_on, batch_queue, replay_priority_queue, update_step):
+        time_start = time.time()
         while update_step.value < self.num_train_steps:
             try:
                 batch = batch_queue.get_nowait()
@@ -174,6 +175,11 @@ class LearnerD4PG(object):
 
         empty_torch_queue(self.learner_w_queue)
         empty_torch_queue(replay_priority_queue)
+
+        time_elapsed = time.time() - time_start
+        hh = time_elapsed // 3600
+        mm = (time_elapsed % 3600) / 60
+        print(f"Training took {hh} hours {mm:.3} minutes")
         print("Exit learner.")
 
     def eval_policy(self, eval_episodes=10):
