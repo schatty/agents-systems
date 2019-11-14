@@ -119,7 +119,7 @@ class Agent(object):
                 self.logger.scalar_summary("agent/episode_timing", time.time() - ep_start_time, step)
 
             rewards.append(episode_reward)
-            if self.local_episode % self.config['update_agent_ep'] == 0:
+            if self.config["agent_device"] == "cpu" and self.local_episode % self.config['update_agent_ep'] == 0:
                 self.update_actor_learner(learner_w_queue, training_on)
 
         empty_torch_queue(replay_queue)

@@ -102,7 +102,7 @@ class LearnerD3PG(object):
             )
 
         # Send updated learner to the queue
-        if not self.learner_w_queue.full():
+        if self.config["agent_device"] == "cpu":# and not self.learner_w_queue.full():
             try:
                 params = [p.data.to(self.config["agent_device"]).detach().numpy() for p in self.policy_net.parameters()]
                 self.learner_w_queue.put_nowait(params)
@@ -113,9 +113,7 @@ class LearnerD3PG(object):
         step = update_step.value
         if (step+1) % self.config["eval_freq"] == 0:
             self.logger.scalar_summary("learner/update_time", time.time() - update_time, step)
-            eval_time = time.time()
             reward = self.eval_policy()
-            self.logger.scalar_summary("learner/eval_time", time.time() - eval_time, step)
             self.logger.scalar_summary("learner/eval_reward", reward, update_step.value)
             self.logger.scalar_summary("learner/policy_loss", policy_loss.item(), step)
             self.logger.scalar_summary("learner/value_loss", value_loss.item(), step)

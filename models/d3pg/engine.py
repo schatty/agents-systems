@@ -120,11 +120,14 @@ class Engine(object):
         target_policy_net = PolicyNetwork(config['state_dim'], config['action_dim'],
                                           config['dense_size'], device=config['device'])
         policy_net = copy.deepcopy(target_policy_net)
-        policy_net_cpu = PolicyNetwork(config['state_dim'], config['action_dim'],
-                                          config['dense_size'], device=config['agent_device'])
+        if config['agent_device'] == 'cpu':
+            agent_policy = PolicyNetwork(config['state_dim'], config['action_dim'], config['dense_size'],
+                                         device='cpu')
+        else:
+            policy_net.share_memory()
+            agent_policy = policy_net
 
         target_policy_net.share_memory()
-
         p = torch_mp.Process(target=learner_worker, args=(config, training_on, policy_net, target_policy_net, learner_w_queue,
                                                           batch_queue, update_step, experiment_dir))
         processes.append(p)
@@ -132,7 +135,7 @@ class Engine(object):
         # Agents
         for i in range(n_agents):
             p = torch_mp.Process(target=agent_worker,
-                                 args=(config, policy_net_cpu, learner_w_queue, global_episode, i, experiment_dir,
+                                 args=(config, agent_policy, learner_w_queue, global_episode, i, experiment_dir,
                                        training_on, replay_queue, update_step))
             processes.append(p)
 
