@@ -141,7 +141,6 @@ class LearnerD3PG(object):
 
     def eval_policy(self, eval_episodes=10):
         env_wrapper = create_env_wrapper(self.config)
-        exp_buffer = deque()
         avg_reward = 0
         for _ in range(eval_episodes):
             state = env_wrapper.reset()
@@ -149,34 +148,9 @@ class LearnerD3PG(object):
             while not done:
                 action = self.target_policy_net.get_action(state).detach().cpu().numpy().flatten()
                 next_state, reward, done = env_wrapper.step(action)
-
                 avg_reward += reward
-
-                state = env_wrapper.normalise_state(state)
-                reward = env_wrapper.normalise_reward(reward)
-                exp_buffer.append((state, action, reward))
-
-                # We need at least N steps in the experience buffer before we can compute Bellman
-                # rewards and add an N-step experience to replay memory
-                if len(exp_buffer) >= self.config['n_step_returns']:
-                    state_0, action_0, reward_0 = exp_buffer.popleft()
-                    discounted_reward = reward_0
-                    gamma = self.config['discount_rate']
-                    for (_, _, r_i) in exp_buffer:
-                        discounted_reward += r_i * gamma
-                        gamma *= self.config['discount_rate']
-
                 state = next_state
-
                 if done:
-                    # add rest of experiences remaining in buffer
-                    while len(exp_buffer) != 0:
-                        state_0, action_0, reward_0 = exp_buffer.popleft()
-                        discounted_reward = reward_0
-                        gamma = self.config['discount_rate']
-                        for (_, _, r_i) in exp_buffer:
-                            discounted_reward += r_i * gamma
-                            gamma *= self.config['discount_rate']
                     break
 
         avg_reward /= eval_episodes
