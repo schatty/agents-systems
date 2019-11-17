@@ -17,7 +17,7 @@ class ReplayBuffer(object):
 		self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-	def add(self, state, action, next_state, reward, done):
+	def add(self, state, action, next_state, reward, done, *kwargs):
 		self.state[self.ptr] = state
 		self.action[self.ptr] = action
 		self.next_state[self.ptr] = next_state

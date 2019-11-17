@@ -1,3 +1,4 @@
+import copy
 from datetime import datetime
 from multiprocessing import set_start_method
 import torch.multiprocessing as torch_mp
@@ -7,10 +8,10 @@ try:
 except RuntimeError:
     pass
 import os
-from shutil import copyfile
+
+from models.agent import Agent
 
 from .td3 import LearnerTD3
-from .agent import Agent
 from .networks import PolicyNetwork
 from utils.misc import read_config, empty_torch_queue
 from utils.logger import Logger
@@ -30,15 +31,13 @@ def sampler_worker(config, replay_queue, batch_queue, training_on,
         log_dir:
     """
     batch_size = config['batch_size']
-    num_steps_train = config['steps_train']
-    log_every = [1, num_steps_train // 1000][num_steps_train > 1000]
 
     # Logger
     log_dir = f"{log_dir}/data_struct"
     logger = Logger(log_dir=log_dir)
 
     # Create replay buffer
-    replay_buffer = ReplayBuffer(state_dim=config["state_dims"], action_dim=config["action_dims"])
+    replay_buffer = ReplayBuffer(state_dim=config["state_dim"], action_dim=config["action_dim"])
 
     while training_on.value or not replay_queue.empty():
         # (1) Transfer replays to global buffer
@@ -58,9 +57,6 @@ def sampler_worker(config, replay_queue, batch_queue, training_on,
             batch = replay_buffer.sample(batch_size)
             batch_queue.put(batch)
 
-        if update_step.value % 1000 == 0:
-            print("Step: ", update_step.value, " buffer: ", len(replay_buffer))
-
         # Log data structures sizes
         if (update_step.value+1) % config["eval_freq"] == 0:
             step = global_episode.value
@@ -73,44 +69,41 @@ def sampler_worker(config, replay_queue, batch_queue, training_on,
     print("Stop sampler worker.")
 
 
-def agent_worker(config, policy_network, global_episode, n_agent, log_dir, training_on, replay_queue, update_step, agent_type):
+def agent_worker(config, policy, learner_w_queue, global_episode, n_agent, log_dir, training_on, replay_queue, update_step):
     agent = Agent(config,
-                  policy_network,
+                  policy,
                   global_episode=global_episode,
                   n_agent=n_agent,
-                  log_dir=log_dir,
-                  agent_type=agent_type)
-    agent.run(training_on, replay_queue, update_step)
+                  log_dir=log_dir)
+    agent.run(training_on, replay_queue, learner_w_queue, update_step)
 
 
-def learner_worker(config, local_policy, target_policy, log_dir, training_on, batch_queue, update_step):
-    learner = LearnerTD3(config, local_policy, target_policy, log_dir=log_dir)
+def learner_worker(config, local_policy, target_policy, learner_w_queue, log_dir, training_on, batch_queue, update_step):
+    learner = LearnerTD3(config, local_policy, target_policy, learner_w_queue, log_dir=log_dir)
     learner.run(training_on, batch_queue, update_step)
 
 
-class ExperimentEngine(object):
-    def __init__(self, config_path):
-        self.config = read_config(config_path)
+class Engine(object):
+    def __init__(self, config):
+        self.config = config
 
         # Create directory for experiment
         self.experiment_dir = f"{self.config['results_path']}/{self.config['env']}-{self.config['model']}-{datetime.now():%Y-%m-%d_%H:%M:%S}"
         if not os.path.exists(self.experiment_dir):
             os.makedirs(self.experiment_dir)
-        if config_path is not None:
-            copyfile(config_path, f"{self.experiment_dir}/config.yml")
 
-    def run(self):
+    def train(self):
         config = self.config
 
         replay_queue_size = config['replay_queue_size']
         batch_queue_size = config['batch_queue_size']
         n_agents = config['num_agents']
-        n_exploiters = config['num_exploiters']
 
         # Data structures
         processes = []
         replay_queue = mp.Queue(maxsize=replay_queue_size)
         batch_queue = mp.Queue(maxsize=batch_queue_size)
+        learner_w_queue = torch_mp.Queue(maxsize=n_agents)
         training_on = torch_mp.Value('i', 1)
         update_step = torch_mp.Value('i', 0)
         global_episode = torch_mp.Value('i', 0)
@@ -121,31 +114,27 @@ class ExperimentEngine(object):
                                    global_episode, update_step, self.experiment_dir))
         processes.append(p)
 
-        # Learner (neural net training process)
-        local_policy = PolicyNetwork(config["state_dims"], config["action_dims"], config["max_action"], config["dense_size"])
-        local_policy.share_memory()
-        local_policy.to(config["device"])
-
-        target_policy = PolicyNetwork(config["state_dims"], config["action_dims"], config["max_action"], config["dense_size"])
+        target_policy = PolicyNetwork(config["state_dim"], config["action_dim"], config["action_high"], config["dense_size"])
         target_policy.share_memory()
         target_policy.to(config["device"])
+        local_policy = copy.deepcopy(target_policy)
+
+        if config['agent_device'] == 'cpu':
+            agent_policy = PolicyNetwork(config['state_dim'], config['action_dim'], config['dense_size'])
+        else:
+            local_policy.share_memory()
+            agent_policy = local_policy
 
         p = torch_mp.Process(target=learner_worker,
-                             args=(config, local_policy, target_policy, self.experiment_dir, training_on, batch_queue, update_step))
+                             args=(config, local_policy, target_policy, learner_w_queue,
+                                   self.experiment_dir, training_on, batch_queue, update_step))
         processes.append(p)
 
-        # Agents (exploitation processes)
-        for i in range(n_exploiters):
+        # Agents
+        for i in range(n_agents):
             p = torch_mp.Process(target=agent_worker,
-                                 args=(self.config, target_policy, global_episode, i,
-                                       self.experiment_dir, training_on, replay_queue, update_step, "exploitation"))
-            processes.append(p)
-
-        # Agents (exploration processes)
-        for i in range(n_exploiters, n_exploiters+n_agents):
-            p = torch_mp.Process(target=agent_worker,
-                                 args=(self.config, local_policy, global_episode, i,
-                                       self.experiment_dir, training_on, replay_queue, update_step, "exploration"))
+                                 args=(self.config, agent_policy, learner_w_queue, global_episode, i,
+                                       self.experiment_dir, training_on, replay_queue, update_step))
             processes.append(p)
 
         for p in processes:

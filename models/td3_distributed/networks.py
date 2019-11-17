@@ -4,19 +4,26 @@ import torch.nn.functional as F
 
 
 class PolicyNetwork(nn.Module):
-    def __init__(self, state_dim, action_dim, max_action, dense_size):
+    def __init__(self, state_dim, action_dim, max_action, dense_size, device="cuda"):
         super(PolicyNetwork, self).__init__()
+        self.device = device
 
         self.l1 = nn.Linear(state_dim, dense_size)
         self.l2 = nn.Linear(dense_size, dense_size)
         self.l3 = nn.Linear(dense_size, action_dim)
 
         self.max_action = max_action
+        self.to(device)
 
     def forward(self, state):
         a = F.relu(self.l1(state))
         a = F.relu(self.l2(a))
         return self.max_action * torch.tanh(self.l3(a))
+
+    def get_action(self, state):
+        state = torch.tensor(state).float().unsqueeze(0).to(self.device)
+        action = self.forward(state)
+        return action
 
 
 class ValueNetwork(nn.Module):
