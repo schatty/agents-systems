@@ -5,7 +5,7 @@ state_dim: 111
 action_dim: 8
 action_low: -1
 action_high: 1
-num_agents: 3
+num_agents: 4
 random_seed: 2019
 
 # Training parameters
