@@ -128,9 +128,6 @@ class Engine(object):
             agent_policy = policy_net
 
         target_policy_net.share_memory()
-        p = torch_mp.Process(target=learner_worker, args=(config, training_on, policy_net, target_policy_net, learner_w_queue,
-                                                          batch_queue, update_step, experiment_dir))
-        processes.append(p)
 
         # Agents
         for i in range(n_agents):
@@ -141,8 +138,11 @@ class Engine(object):
 
         for p in processes:
             p.start()
+
+        learner_worker(config, training_on, policy_net, target_policy_net,
+                       learner_w_queue, batch_queue, update_step, experiment_dir)
+
         for p in processes:
-            p.join()
+            p.terminate()
 
         print("End.")
-

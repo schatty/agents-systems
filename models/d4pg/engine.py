@@ -133,10 +133,6 @@ class Engine(object):
                                           config['dense_size'], device=config['agent_device'])
         target_policy_net.share_memory()
 
-        p = torch_mp.Process(target=learner_worker, args=(config, training_on, policy_net, target_policy_net, learner_w_queue,
-                                                          replay_priorities_queue, batch_queue, update_step, experiment_dir))
-        processes.append(p)
-
         # Agents
         for i in range(n_agents):
             p = torch_mp.Process(target=agent_worker,
@@ -146,8 +142,11 @@ class Engine(object):
 
         for p in processes:
             p.start()
-        for p in processes:
-            p.join()
 
-        print("End.")
+        # Run learner
+        learner_worker(config, training_on, policy_net, target_policy_net, learner_w_queue,
+                       replay_priorities_queue, batch_queue, update_step, experiment_dir)
+
+        for p in processes:
+            p.terminate()
 

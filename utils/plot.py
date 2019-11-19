@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
 import seaborn as sns
 sns.set_style('whitegrid')
-colors = ['greyish', 'faded blue', "faded green"]
+colors = ['greyish', 'faded blue', 'pink', "faded green"]
 sns.set_palette(sns.xkcd_palette(colors))
 
 
@@ -43,27 +43,39 @@ def plot_data(paths, output_path, n_rows=1, n_cols=3, smooth_len=5, lw=3, figsiz
 if __name__ == "__main__":
     paths = {
         'Ant-v2': {
-            'DDPG': '/Users/igor.kuznetsov/Downloads/ant_ddpg.json',
-            'TD3': '/Users/igor.kuznetsov/Downloads/ant_td3.json'
+            'DDPG': 'results/ddpg/ant_ddpg.json',
+            'D3PG': 'results/d3pg/ant_d3pg.json',
+            'TD3': 'results/td3/ant_td3.json',
+            'TD4': 'results/td3_distributed/ant_td3_distr.json'
         },
         'HalfCheetah-v2': {
-            'DDPG': '/Users/igor.kuznetsov/Downloads/half_cheetah_ddpg.json',
-            'TD3': '/Users/igor.kuznetsov/Downloads/half_cheetah_td3.json'
+            'DDPG': 'results/ddpg//half_cheetah_ddpg.json',
+            'D3PG': 'results/d3pg/half_cheetah_d3pg.json',
+            'TD3': 'results/td3/half_cheetah_td3.json',
+            'TD4': 'results/td3_distributed/half_cheetah_td3_distr.json'
         },
         'Hopper-v2': {
-            'DDPG': '/Users/igor.kuznetsov/Downloads/hopper_ddpg.json',
-            'TD3': '/Users/igor.kuznetsov/Downloads/hopper_td3.json'
+            'DDPG': 'results/ddpg/hopper_ddpg.json',
+            'D3PG': 'results/d3pg/hopper_d3pg.json',
+            'TD3': 'results/td3/hopper_td3.json',
+            'TD4': 'results/td3_distributed/hopper_td3_distr.json',
         },
         'InvertedPendulum-v2': {
-            'DDPG': '/Users/igor.kuznetsov/Downloads/inverted_pendulum_ddpg.json',
-            'TD3': '/Users/igor.kuznetsov/Downloads/inverted_pendulum_td3.json'
+            'DDPG': 'results/ddpg/inverted_pendulum_ddpg.json',
+            'D3PG': 'results/d3pg/inverted_pendulum_d3pg.json',
+            'TD3': 'results/td3/inverted_pendulum_td3.json',
+            'TD4': 'results/td3_distributed/inverted_pendulum_td3_distr.json',
         },
         'InvertedDoublePendulum-v2': {
-            'TD3': '/Users/igor.kuznetsov/Downloads/inverted_double_pendulum_td3.json'
+            'D3PG': 'results/d3pg/inverted_double_pendulum_d3pg.json',
+            'TD3': 'results/td3/inverted_double_pendulum_td3.json',
+            'TD4': 'results/td3_distributed/inverted_double_pendulum_td3_distr.json'
         },
         'Walker2d-v2': {
-            'DDPG': '/Users/igor.kuznetsov/Downloads/walker_ddpg.json',
-            'TD3': '/Users/igor.kuznetsov/Downloads/walker_td3.json'
+            'DDPG': 'results/ddpg/walker_ddpg.json',
+            #'D3PG': 'results/d3pg/walker2d_d3pg.json',
+            'TD3': 'results/td3/walker_td3.json',
+            'TD4': 'results/td3_distributed/walker2d_td3_distr.json'
         }
     }
-    plot_data(paths, "plot.png", n_rows=2, n_cols=3, figsize=(20, 10))
+    plot_data(paths, "plot.png", n_rows=2, n_cols=3, smooth_len=10, figsize=(20, 10))

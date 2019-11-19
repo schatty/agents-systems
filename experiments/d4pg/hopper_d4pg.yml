@@ -1,7 +1,7 @@
 # Environment parameters
 
 env: Hopper-v2
-state_dim: 1
+state_dim: 11
 action_dim: 3
 action_low: -1
 action_high: 1
@@ -12,7 +12,7 @@ random_seed: 2019
 
 model: d4pg
 batch_size: 256
-num_steps_train: 100_000 # number of episodes from all agents
+num_steps_train: 1_000_000 # number of episodes from all agents
 max_ep_length: 1000 # maximum number of steps per episode
 replay_mem_size: 1000000 # maximum capacity of replay memory
 priority_alpha: 0.6 # controls the randomness vs prioritisation of the prioritised sampling (0.0 = Uniform sampling, 1.0 = Greedy prioritisation)
@@ -26,9 +26,10 @@ batch_queue_size: 64 # queue with batches given to learner
 replay_memory_prioritized: 0
 num_episode_save: 100
 device: cuda
-agent_device: cpu
+agent_device: cuda
 save_buffer_on_disk: 0
 save_reward_threshold: 1 # difference in best reward to save agent model
+eval_freq: 5000
 
 
 # Network parameters
