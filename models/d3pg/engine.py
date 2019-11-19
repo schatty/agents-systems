@@ -61,10 +61,11 @@ def sampler_worker(config, replay_queue, batch_queue, training_on,
 
         # Log data structures sizes
         step = update_step.value
-        logger.scalar_summary("data_struct/global_episode", global_episode.value, step)
-        logger.scalar_summary("data_struct/replay_queue", replay_queue.qsize(), step)
-        logger.scalar_summary("data_struct/batch_queue", batch_queue.qsize(), step)
-        logger.scalar_summary("data_struct/replay_buffer", len(replay_buffer), step)
+        if (step + 1) % config["eval_freq"] == 0:
+            logger.scalar_summary("data_struct/global_episode", global_episode.value, step)
+            logger.scalar_summary("data_struct/replay_queue", replay_queue.qsize(), step)
+            logger.scalar_summary("data_struct/batch_queue", batch_queue.qsize(), step)
+            logger.scalar_summary("data_struct/replay_buffer", len(replay_buffer), step)
 
     empty_torch_queue(batch_queue)
     print("Stop sampler worker.")

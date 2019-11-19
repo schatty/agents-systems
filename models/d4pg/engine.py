@@ -50,11 +50,12 @@ def sampler_worker(config, replay_queue, batch_queue, replay_priorities_queue, t
         if len(replay_buffer) < batch_size:
             continue
 
-        try:
-            inds, weights = replay_priorities_queue.get_nowait()
-            replay_buffer.update_priorities(inds, weights)
-        except queue.Empty:
-            pass
+        if config["replay_memory_prioritized"]:
+            try:
+                inds, weights = replay_priorities_queue.get_nowait()
+                replay_buffer.update_priorities(inds, weights)
+            except queue.Empty:
+                pass
 
         try:
             batch = replay_buffer.sample(batch_size)
@@ -129,14 +130,18 @@ class Engine(object):
         target_policy_net = PolicyNetwork(config['state_dim'], config['action_dim'],
                                           config['dense_size'], device=config['device'])
         policy_net = copy.deepcopy(target_policy_net)
-        policy_net_cpu = PolicyNetwork(config['state_dim'], config['action_dim'],
-                                          config['dense_size'], device=config['agent_device'])
         target_policy_net.share_memory()
+        if config['agent_device'] == 'cpu':
+            agent_policy = PolicyNetwork(config['state_dim'], config['action_dim'], config['dense_size'],
+                                         device='cpu')
+        else:
+            policy_net.share_memory()
+            agent_policy = policy_net
 
         # Agents
         for i in range(n_agents):
             p = torch_mp.Process(target=agent_worker,
-                                 args=(config, policy_net_cpu, learner_w_queue, global_episode, i, experiment_dir,
+                                 args=(config, agent_policy, learner_w_queue, global_episode, i, experiment_dir,
                                        training_on, replay_queue, update_step))
             processes.append(p)
 

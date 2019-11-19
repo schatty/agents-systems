@@ -66,12 +66,9 @@ class LearnerD4PG(object):
 
         state, action, reward, next_state, done, gamma, weights, inds = batch
 
-        state = np.asarray(state)
-        action = np.asarray(action)
-        reward = np.asarray(reward)
-        next_state = np.asarray(next_state)
-        done = np.asarray(done)
-        weights = np.asarray(weights)
+        reward = np.asarray(reward).flatten()
+        done = np.asarray(done).flatten()
+        weights = np.asarray(weights).flatten()
         inds = np.asarray(inds).flatten()
 
         state = torch.from_numpy(state).float().to(self.device)
@@ -141,7 +138,7 @@ class LearnerD4PG(object):
             )
 
         # Send updated learner to the queue
-        if not self.learner_w_queue.full():
+        if self.config["agent_device"] == "cpu" and not self.learner_w_queue.full():
             try:
                 params = [p.data.cpu().detach().numpy() for p in self.policy_net.parameters()]
                 self.learner_w_queue.put(params)
