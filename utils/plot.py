@@ -73,7 +73,7 @@ if __name__ == "__main__":
         },
         'Walker2d-v2': {
             'DDPG': 'results/ddpg/walker_ddpg.json',
-            #'D3PG': 'results/d3pg/walker2d_d3pg.json',
+            'D3PG': 'results/d3pg/walker2d_d3pg.json',
             'TD3': 'results/td3/walker_td3.json',
             'TD4': 'results/td3_distributed/walker2d_td3_distr.json'
         }
