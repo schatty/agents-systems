@@ -45,18 +45,21 @@ if __name__ == "__main__":
         'Ant-v2': {
             'DDPG': 'results/ddpg/ant_ddpg.json',
             'D3PG': 'results/d3pg/ant_d3pg.json',
+            'D4PG': 'results/d4pg/ant_d4pg.json',
             'TD3': 'results/td3/ant_td3.json',
             'TD4': 'results/td3_distributed/ant_td3_distr.json'
         },
         'HalfCheetah-v2': {
             'DDPG': 'results/ddpg//half_cheetah_ddpg.json',
             'D3PG': 'results/d3pg/half_cheetah_d3pg.json',
+            'D4PG': 'results/d4pg/half_cheetah_d4pg.json',
             'TD3': 'results/td3/half_cheetah_td3.json',
             'TD4': 'results/td3_distributed/half_cheetah_td3_distr.json'
         },
         'Hopper-v2': {
             'DDPG': 'results/ddpg/hopper_ddpg.json',
             'D3PG': 'results/d3pg/hopper_d3pg.json',
+            'D4PG': 'results/d4pg/hopper_d4pg.json',
             'TD3': 'results/td3/hopper_td3.json',
             'TD4': 'results/td3_distributed/hopper_td3_distr.json',
         },
