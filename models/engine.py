@@ -3,6 +3,7 @@ from .d3pg.engine import Engine as D3PGEngine
 from .d4pg.engine import Engine as D4PGEngine
 from .td3.engine import Engine as TD3Engine
 from .td3_distributed.engine import Engine as TD3DistributedEngine
+from .td5.engine import Engine as TD5Engine
 
 
 def load_engine(config):
@@ -17,4 +18,6 @@ def load_engine(config):
         return TD3Engine(config)
     if config["model"] == "td3_distributed":
         return TD3DistributedEngine(config)
+    if config["model"] == "td5":
+        return TD5Engine(config)
     raise ValueError(f"Unknown model: {config['model']}")
