@@ -5,7 +5,7 @@ state_dim: 17
 action_dim: 6
 action_low: -1
 action_high: 1
-num_agents: 4
+num_agents: 2
 random_seed: 2019
 
 # Training parameters
@@ -40,8 +40,8 @@ dense_size: 400 # size of the 2 hidden layers in networks
 final_layer_init: 0.003
 num_atoms: 51 # number of atoms in output layer of distributed critic
 v_min: 0 # lower bound of critic value output distribution
-v_max: 5000 # upper bound of critic value output distribution
-tau: 0.001 # parameter for soft target network updates
+v_max: 4500 # upper bound of critic value output distribution
+tau: 0.0001 # parameter for soft target network updates
 
 # Miscellaneous
 results_path: results

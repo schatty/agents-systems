@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
 import seaborn as sns
 sns.set_style('whitegrid')
-colors = ['greyish', 'faded blue', 'pink', "faded green"]
+colors = ['greyish', 'faded blue', 'pink', "faded green", 'olive']
 sns.set_palette(sns.xkcd_palette(colors))
 
 
@@ -66,17 +66,20 @@ if __name__ == "__main__":
         'InvertedPendulum-v2': {
             'DDPG': 'results/ddpg/inverted_pendulum_ddpg.json',
             'D3PG': 'results/d3pg/inverted_pendulum_d3pg.json',
+            'D4PG': 'results/d4pg/inverted_pendulum_d4pg.json',
             'TD3': 'results/td3/inverted_pendulum_td3.json',
             'TD4': 'results/td3_distributed/inverted_pendulum_td3_distr.json',
         },
         'InvertedDoublePendulum-v2': {
             'D3PG': 'results/d3pg/inverted_double_pendulum_d3pg.json',
+            'D4PG': 'results/d4pg/inverted_double_pendulum_d4pg.json',
             'TD3': 'results/td3/inverted_double_pendulum_td3.json',
             'TD4': 'results/td3_distributed/inverted_double_pendulum_td3_distr.json'
         },
         'Walker2d-v2': {
             'DDPG': 'results/ddpg/walker_ddpg.json',
             'D3PG': 'results/d3pg/walker2d_d3pg.json',
+            'D4PG': 'results/d4pg/walker2d_d4pg.json',
             'TD3': 'results/td3/walker_td3.json',
             'TD4': 'results/td3_distributed/walker2d_td3_distr.json'
         }
