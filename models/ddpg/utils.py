@@ -16,7 +16,6 @@ class ReplayBuffer(object):
 
 		self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
 	def add(self, state, action, next_state, reward, done):
 		self.state[self.ptr] = state
 		self.action[self.ptr] = action
@@ -26,7 +25,6 @@ class ReplayBuffer(object):
 
 		self.ptr = (self.ptr + 1) % self.max_size
 		self.size = min(self.size + 1, self.max_size)
-
 
 	def sample(self, batch_size):
 		ind = np.random.randint(0, self.size, size=batch_size)
@@ -38,3 +36,6 @@ class ReplayBuffer(object):
 			torch.FloatTensor(self.reward[ind]).to(self.device),
 			torch.FloatTensor(self.not_done[ind]).to(self.device)
 		)
+
+	def __len__(self):
+		return self.size

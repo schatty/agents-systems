@@ -152,6 +152,7 @@ class Engine(object):
                 reward = eval_policy(policy, env_name, seed)
                 # Save reward
                 logger.scalar_summary("agent/eval_reward", reward, t)
+                logger.scalar_summary("data_struct/replay_buffer", len(replay_buffer), t)
                 # Save model
                 policy.save(f"{experiment_dir}/models/policy_{t}")
 

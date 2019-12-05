@@ -39,7 +39,7 @@ class Engine(object):
     def train(self):
         config = self.config
         env_name = config["env"]
-        seed = config["seed"]
+        seed = config["random_seed"]
         save_dir = config["results_path"]
 
         state_dim = config["state_dim"]
@@ -147,6 +147,7 @@ class Engine(object):
                 reward = eval_policy(policy, env_name, seed)
                 # Save reward
                 logger.scalar_summary("agent/eval_reward", reward, t)
+                logger.scalar_summary("data_struct/buffer", len(replay_buffer), t)
                 # Save model
                 policy.save(f"{experiment_dir}/models/policy_{t}")
 
