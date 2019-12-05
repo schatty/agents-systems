@@ -73,7 +73,8 @@ class TD3(object):
             noise_clip=0.5,
             policy_freq=2,
             log_dir="",
-            device="cuda"
+            device="cuda",
+            postfix="",
     ):
 
         self.actor = Actor(state_dim, action_dim, max_action).to(device)
@@ -90,21 +91,26 @@ class TD3(object):
         self.policy_noise = policy_noise
         self.noise_clip = noise_clip
         self.policy_freq = policy_freq
+        if len(postfix):
+            self.postfix = "-" + postfix
+        else:
+            self.postfix = ""
+        print("POSTFIX: ", self.postfix)
 
         self.total_it = 0
 
         self.device = device
-        self.logger = Logger(f"{log_dir}/td3")
+        self.logger = Logger(f"{log_dir}/td3{postfix}")
 
     def select_action(self, state):
         state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
         return self.actor(state).cpu().data.numpy().flatten()
 
-    def train(self, replay_buffer, step, batch_size):
+    def train(self, replay_buffer, step, batch_size, percentile=0):
         self.total_it += 1
 
         # Sample replay buffer
-        state, action, next_state, reward, not_done = replay_buffer.sample(batch_size)
+        state, action, next_state, reward, not_done = replay_buffer.sample(batch_size, percentile=percentile)
 
         with torch.no_grad():
             # Select action according to policy and add clipped noise
@@ -150,9 +156,10 @@ class TD3(object):
             for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
-        if ((step+1) % 5_000) == 0:
-            self.logger.scalar_summary("td3/policy_loss", self.actor_loss, step)
-            self.logger.scalar_summary("td3/critic_loss", critic_loss, step)
+        if (self.total_it % 5_000) == 0:
+            print("Writing to the TB: ", self.postfix)
+            self.logger.scalar_summary(f"td3/policy_loss", self.actor_loss, step)
+            self.logger.scalar_summary(f"td3/critic_loss", critic_loss, step)
 
     def save(self, filename):
         torch.save(self.critic.state_dict(), filename + "_critic")

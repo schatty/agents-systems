@@ -93,11 +93,13 @@ class Engine(object):
             "noise_clip": noise_clip * max_action,
             "policy_freq": policy_freq,
             "log_dir": experiment_dir,
-            "device": device
+            "device": device,
         }
 
         # Initialize policy
         policy = TD3(**kwargs)
+        policy_positive = TD3(**kwargs, postfix="pos")
+        policy_pos_freq = 1
 
         if load_model is not None:
             policy.load(load_model)
@@ -118,10 +120,16 @@ class Engine(object):
             if t < start_timesteps:
                 action = env.action_space.sample()
             else:
-                action = (
+                if t % 2 == 0:
+                    action = (
                         policy.select_action(np.array(state))
                         + np.random.normal(0, max_action * expl_noise, size=action_dim)
-                ).clip(-max_action, max_action)
+                    ).clip(-max_action, max_action)
+                else:
+                    action = (
+                            policy_positive.select_action(np.array(state))
+                            + np.random.normal(0, max_action * expl_noise, size=action_dim)
+                    ).clip(-max_action, max_action)
 
             # Perform action
             next_state, reward, done, _ = env.step(action)
@@ -136,6 +144,8 @@ class Engine(object):
             # Train agent after collecting sufficient data
             if t >= start_timesteps:
                 policy.train(replay_buffer, step=t, batch_size=batch_size)
+                #if t % policy_pos_freq == 0:
+                policy_positive.train(replay_buffer, step=t, batch_size=batch_size, percentile=0)
 
             if done:
                 # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
@@ -150,8 +160,11 @@ class Engine(object):
             # Evaluate episode
             if (t + 1) % eval_freq == 0:
                 reward = eval_policy(policy, env_name, seed)
-                # Save reward
                 logger.scalar_summary("agent/eval_reward", reward, t)
+
+                reward_pos = eval_policy(policy_positive, env_name, seed)
+                logger.scalar_summary("agent/eval_reward_pos", reward_pos, t)
+
                 logger.scalar_summary("data_struct/replay_buffer", len(replay_buffer), t)
                 # Save model
                 policy.save(f"{experiment_dir}/models/policy_{t}")

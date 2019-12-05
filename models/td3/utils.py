@@ -27,8 +27,13 @@ class ReplayBuffer(object):
 		self.ptr = (self.ptr + 1) % self.max_size
 		self.size = min(self.size + 1, self.max_size)
 
-	def sample(self, batch_size):
-		ind = np.random.randint(0, self.size, size=batch_size)
+	def sample(self, batch_size, percentile=0):
+		ind = []
+		th = np.percentile(self.reward[:self.size], percentile)
+		while len(ind) < batch_size:
+			ind_a = np.random.randint(0, self.size, size=batch_size)
+			ind += ind_a[self.reward[ind_a].flatten() > th].tolist()
+		ind = ind[:batch_size]
 
 		return (
 			torch.FloatTensor(self.state[ind]).to(self.device),
