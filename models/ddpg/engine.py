@@ -151,6 +151,11 @@ class Engine(object):
                 # Save model
                 policy.save(f"{experiment_dir}/models/policy_{t}")
 
+            if (t + 1) % (max_timesteps // 5) == 0:
+                # Save buffer to file
+                buffer_path = os.path.join(experiment_dir, f"replay_buffer_{t+1}.pkl")
+                replay_buffer.save(buffer_path)
+
         total_time = time.time() - start_time
         hh = total_time // 3600
         mm = (total_time % 3600) / 60

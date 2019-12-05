@@ -1,3 +1,4 @@
+import pickle
 import numpy as np
 import torch
 
@@ -39,3 +40,13 @@ class ReplayBuffer(object):
 
 	def __len__(self):
 		return self.size
+
+	def save(self, path):
+		d = {'state': self.state,
+			 'action': self.action,
+			 'next_state': self.next_state,
+			 'reward': self.reward,
+			 'not_done': self.not_done}
+		with open(path, 'wb') as f:
+			pickle.dump(d, f)
+		print(f"Buffer dumped to {path}")

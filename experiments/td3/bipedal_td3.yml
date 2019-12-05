@@ -11,7 +11,7 @@ seed: 2019
 
 model: td3
 batch_size: 256
-num_steps_train: 500_000 # number of episodes from all agents
+num_steps_train: 1_000_000 # number of episodes from all agents
 replay_mem_size: 1_000_000 # maximum capacity of replay memory
 discount_rate: 0.99 # Discount rate (gamma) for future rewards
 device: cuda
