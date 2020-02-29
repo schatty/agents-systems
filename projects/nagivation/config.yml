@@ -1,0 +1,20 @@
+env_path: /home/igor/Banana_Linux/Banana    # Path to the env file
+seed: 0
+
+# Training
+
+model:  DQN         # Model name
+n_episodes: 200    # Number of episodes to train
+eps_start: 1.0  # Initial value of epsilon
+eps_end: 0.01   # Mimimum value of epsilon
+eps_decay: 0.995    # Multiplition rate
+buffer_size: 100_000 # Replay buffer size
+batch_size: 64
+lr: 0.00005 # Learning rate
+gamma: 0.99 # Discount factor
+update_every: 4 # How often to update the network
+tau: 0.001  # For soft update for target parameters
+device: cuda:0
+
+model_dir: saved_models
+results_dir: results

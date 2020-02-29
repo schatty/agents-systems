@@ -1,60 +1,80 @@
 import os
+import argparse
 import numpy as np
-import random
-from collections import namedtuple, deque
-import torch
-import torch.nn.functional as F
-import torch.optim as optim
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
+from collections import deque
 from unityagents import UnityEnvironment
-import numpy as np
+
+import torch
 
 from env import UnityEnvWrapper
 from models.agent import Agent
-
-env = UnityEnvWrapper(UnityEnvironment(file_name="/home/igor/Banana_Linux/Banana"))
-env.reset()
-
-agent = Agent(state_size=env.state_dim, action_size=env.action_dim, seed=0)
+from utils import load_config
 
 
-def dqn(n_episodes=200, eps_start=1.0, eps_end=0.01, eps_decay=0.995):
-    """Deep Q-Learning.
-    
-    Params
-    ======
-        n_episodes (int): maximum number of training episodes
-        eps_start (float): starting value of epsilon, for epsilon-greedy action selection
-        eps_end (float): minimum value of epsilon
-        eps_decay (float): multiplicative factor (per episode) for decreasing epsilon
-    """
-    scores = []                        # list containing scores from each episode
-    scores_window = deque(maxlen=100)  # last 100 scores
-    eps = eps_start                    # initialize epsilon
-    for i_episode in range(1, n_episodes+1):
-        state = env.reset()
-        score = 0
-        while True:
-            action = agent.act(state, eps)
-            next_state, reward, done = env.step(action)
-            agent.step(state, action, reward, next_state, done)
-            state = next_state
-            score += reward
-            if done:
-                break 
-        scores_window.append(score)       # save most recent score
-        scores.append(score)              # save most recent score
-        eps = max(eps_end, eps_decay*eps) # decrease epsilon
-        print('\rEpisode {}\tAverage Score: {:.2f}'.format(i_episode, np.mean(scores_window)), end="")
-        if i_episode % 100 == 0:
-            print('\rEpisode {}\tAverage Score: {:.2f}'.format(i_episode, np.mean(scores_window)))
-            agent.save("saved_models/model")
-    return scores
+class Trainer:
+    """Runs train procedure from config. """
+
+    def __init__(self, config):
+        self.config = config
+
+    def train(self):
+        config = self.config
+        torch.manual_seed(config["seed"])
+
+        env = UnityEnvWrapper(UnityEnvironment(file_name=config["env_path"]))
+        env.reset()
+
+        agent = Agent(config, env.state_dim, env.action_dim)
+
+        # Epsilon parameters
+        eps_start = config["eps_start"]
+        eps_end = config["eps_end"]
+        eps_decay = config["eps_decay"]
+
+        scores = []
+        scores_window = deque(maxlen=100)
+        eps = eps_start
+        for i_ep in range(1, config["n_episodes"]+1):
+            state = env.reset()
+            score = 0
+            while True:
+                action = agent.act(state, eps)
+                next_state, reward, done = env.step(action)
+                agent.step(state, action, reward, next_state, done)
+                state = next_state
+                score += reward
+                if done:
+                    break
+            scores_window.append(score)
+            scores.append(score)
+            eps = max(eps_end, eps_decay*eps)
+            mean_score = np.mean(scores_window)
+            print(f'\rEpisode {i_ep}\tAverage Score: {mean_score:.2f}', end="")
+            if i_ep % 100 == 0:
+                print(f'\rEpisode {i_ep}\tAverage Score: {mean_score:.2f}')
+                agent.save("saved_models/model")
+        return scores
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="config.yml")
+    args = parser.parse_args()
+    return args
+
+
+def save_scores(scores, save_dir, model_name, seed):
+    fn = f"{save_dir}/{model_name}-{seed}.npy"
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    with open(fn, "wb") as f:
+        np.save(f, scores)
 
 
 if __name__ == "__main__":
-    scores = dqn()
+    args = parse_args()
+    config = load_config(args.config)
+
+    trainer = Trainer(config)
+    scores = trainer.train()
+    save_scores(scores, config["results_dir"], config["model"], config["seed"])

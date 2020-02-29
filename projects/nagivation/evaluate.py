@@ -44,10 +44,6 @@ def parse_args():
     parser.add_argument("--config", help="Path to the config file.")
     parser.add_argument("--n", default=10,
                         help="Number of times to evaluate model.")
-    parser.add_argument("--save_video", action="store_true", default=False,
-                        help="Flag to save video from the first evaluation.")
-    parser.add_argument("--video_dir", default="videos/demo",
-                        help="Directory for video saving.")
     args = parser.parse_args()
     return args
 
@@ -62,6 +58,5 @@ if __name__ == "__main__":
     agent = Agent(state_size=env.state_dim, action_size=env.action_dim, seed=0)
     agent.load("saved_models/model")
 
-    eval_score = evaluate(env, agent, n_episodes=args.n,
-                          save_video=args.save_video, video_dir=args.video_dir)
+    eval_score = evaluate(env, agent, n_episodes=args.n)
     print(f"Eval score: {eval_score:5.3f}")
