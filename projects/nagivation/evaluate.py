@@ -50,12 +50,13 @@ if __name__ == "__main__":
     args = parse_args()
     config = load_config(args.config)
 
-    path = "/home/igor/Banana_Linux/Banana"
+    path = "/Users/igor/Downloads/Banana.app"
     env = UnityEnvWrapper(UnityEnvironment(file_name=path))
     env.reset()
 
+    config["device"] = "cpu"
     agent = DQN(config, state_size=env.state_dim, action_size=env.action_dim)
-    agent.load("saved_models/model")
+    agent.load("saved_models/model", "cpu")
 
     eval_score = evaluate(env, agent, n_episodes=args.n)
     print(f"Eval score: {eval_score:5.3f}")

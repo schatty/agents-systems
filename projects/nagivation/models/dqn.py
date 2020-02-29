@@ -142,9 +142,11 @@ class DQN():
         torch.save(self.qnet_local, f"{save_dir}/qnet_local.pt")
         torch.save(self.qnet_target, f"{save_dir}/qnet_target.pt")
 
-    def load(self, load_dir):
-        self.qnet_local = torch.load(f"{load_dir}/qnet_local.pt")
-        self.qnet_target = torch.load(f"{load_dir}/qnet_target.pt")
+    def load(self, load_dir, map_location="cuda:0"):
+        self.qnet_local = torch.load(f"{load_dir}/qnet_local.pt",
+                                     map_location=map_location)
+        self.qnet_target = torch.load(f"{load_dir}/qnet_target.pt",
+                                      map_location=map_location)
 
 
 class ReplayBuffer:
