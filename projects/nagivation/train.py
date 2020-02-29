@@ -1,3 +1,4 @@
+import time
 import os
 import argparse
 import numpy as np
@@ -7,7 +8,7 @@ from unityagents import UnityEnvironment
 import torch
 
 from env import UnityEnvWrapper
-from models.agent import Agent
+from models.dqn import DQN
 from utils import load_config
 
 
@@ -24,7 +25,7 @@ class Trainer:
         env = UnityEnvWrapper(UnityEnvironment(file_name=config["env_path"]))
         env.reset()
 
-        agent = Agent(config, env.state_dim, env.action_dim)
+        agent = DQN(config, env.state_dim, env.action_dim)
 
         # Epsilon parameters
         eps_start = config["eps_start"]
@@ -34,6 +35,7 @@ class Trainer:
         scores = []
         scores_window = deque(maxlen=100)
         eps = eps_start
+        time_start = time.time()
         for i_ep in range(1, config["n_episodes"]+1):
             state = env.reset()
             score = 0
@@ -53,12 +55,19 @@ class Trainer:
             if i_ep % 100 == 0:
                 print(f'\rEpisode {i_ep}\tAverage Score: {mean_score:.2f}')
                 agent.save("saved_models/model")
+
+        time_elapsed = time.time() - time_start()
+        print(f"Traing took: {time_elapsed // 3600:4.3d} hours")
+
         return scores
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="config.yml")
+    parser.add_argument("--config", type=str, default="config.yml",
+                        help="Path to the .yaml config.")
+    parser.add_argument("--seed", type=int, default=-1,
+                        help="Seed of higher priority then in config.")
     args = parser.parse_args()
     return args
 
@@ -74,6 +83,10 @@ def save_scores(scores, save_dir, model_name, seed):
 if __name__ == "__main__":
     args = parse_args()
     config = load_config(args.config)
+
+    # Seed from arguments has higher priority
+    if args.seed != -1:
+        config["seed"] = args.seed
 
     trainer = Trainer(config)
     scores = trainer.train()

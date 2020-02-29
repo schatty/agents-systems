@@ -4,7 +4,7 @@ seed: 0
 # Training
 
 model:  DQN         # Model name
-n_episodes: 200    # Number of episodes to train
+n_episodes: 2000    # Number of episodes to train
 eps_start: 1.0  # Initial value of epsilon
 eps_end: 0.01   # Mimimum value of epsilon
 eps_decay: 0.995    # Multiplition rate

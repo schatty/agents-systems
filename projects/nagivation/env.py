@@ -1,3 +1,6 @@
+"""Wrapper for the Unity environment. """
+
+
 class UnityEnvWrapper:
     def __init__(self, unity_env):
         self.env = unity_env

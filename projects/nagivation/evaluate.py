@@ -3,7 +3,8 @@ import numpy as np
 from unityagents import UnityEnvironment
 
 from env import UnityEnvWrapper
-from models.agent import Agent
+from models.dqn import DQN
+from utils import load_config
 
 
 def evaluate(env, agent, n_episodes=10, save_video=False, video_dir="demo"):
@@ -22,10 +23,6 @@ def evaluate(env, agent, n_episodes=10, save_video=False, video_dir="demo"):
         state = env.reset()
         score = 0
         while True:
-            if i == 0:
-                img = env.render()
-                print("Render: ", type(img))
-                print(img.shape)
             action = agent.act(state)
             next_state, reward, done = env.step(action)
             score += reward
@@ -41,8 +38,9 @@ def evaluate(env, agent, n_episodes=10, save_video=False, video_dir="demo"):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", help="Path to the config file.")
-    parser.add_argument("--n", default=10,
+    parser.add_argument("--config", default="config.yml",
+                        help="Path to the config file.")
+    parser.add_argument("--n", type=int, default=10,
                         help="Number of times to evaluate model.")
     args = parser.parse_args()
     return args
@@ -50,12 +48,13 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
+    config = load_config(args.config)
 
     path = "/home/igor/Banana_Linux/Banana"
     env = UnityEnvWrapper(UnityEnvironment(file_name=path))
     env.reset()
 
-    agent = Agent(state_size=env.state_dim, action_size=env.action_dim, seed=0)
+    agent = DQN(config, state_size=env.state_dim, action_size=env.action_dim)
     agent.load("saved_models/model")
 
     eval_score = evaluate(env, agent, n_episodes=args.n)
